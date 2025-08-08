@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from app.models.organization import Organization
+from app.models.profile import Organization
 from app.schemas.profile_schema import OrgProfile
 
 def create_organization(db: Session, org_data: OrgProfile):
