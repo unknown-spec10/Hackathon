@@ -17,7 +17,6 @@ def get_course(db: Session, course_id: int):
     course = course_repo.get_course_by_id(db, course_id)
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
-    # increment views
     course.views = (course.views or 0) + 1
     db.commit()
     db.refresh(course)
