@@ -1,6 +1,5 @@
 import enum
-from sqlalchemy import Column, Integer, String, Date, Text, Enum
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy import Column, Integer, String, Date, Text, Enum, JSON
 from database.db_setup import Base
 
 
@@ -42,3 +41,4 @@ class Job(Base):
     posted_date = Column(Date, nullable=True)
     updated_date = Column(Date, nullable=True)
     number_of_openings = Column(Integer, nullable=False, default=1)
+    views = Column(Integer, nullable=False, default=0)

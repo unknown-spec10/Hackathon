@@ -1,5 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, Text, Enum
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy import Column, Integer, String, Date, Text, Enum, JSON
 from database.db_setup import Base
 import enum
 
@@ -21,4 +20,5 @@ class Course(Base):
     description = Column(Text, nullable=False)
     skills_required = Column(JSON, nullable=False)  
     application_deadline = Column(Date, nullable=False)
-    prerequisites = Column(JSON, nullable=False)  
+    prerequisites = Column(JSON, nullable=False)
+    views = Column(Integer, nullable=False, default=0)
