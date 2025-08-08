@@ -6,6 +6,6 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True)
-    password_hash = Column(String)  # Store hashed password
-    org_id = Column(Integer)  # ForeignKey link optional
+    password_hash = Column(String)  
+    org_id = Column(Integer)  
     email = Column(String, unique=True, nullable=False)
