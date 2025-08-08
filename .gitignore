@@ -1,0 +1,55 @@
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+.venv*/
+venv/
+venv*/
+env/
+env*/
+ENV/
+
+# Environment files (ignore ALL env files in any folder)
+.env
+.env.*
+*.env
+*.env.*
+**/.env
+**/.env.*
+
+# Editor/IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Test/coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.cache/
+
+# MyPy / Type checking
+.mypy_cache/
+.pytype/
+
+# Local databases & state
+*.db
+*.sqlite3
+demo_workflow.db
+
+# Logs
+*.log
+
+# OS-specific
+.DS_Store
+Thumbs.db
