@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
-from app.schemas.profile_schema import OrgProfile
+from app.schemas.organization_schema import OrgProfile
 from app.repositories import profile_repo
 
 

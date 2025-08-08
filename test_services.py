@@ -1,6 +1,6 @@
 from datetime import date
 from app.service import course_service, job_service, profile_service
-from app.models.profile import Organization, OrgTypeEnum
+from app.models.organization import Organization, OrgTypeEnum
 from app.schemas.course_schema import CourseCreate, CourseMode
 from app.schemas.job_schema import JobCreate, JobType
 

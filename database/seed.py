@@ -3,7 +3,7 @@ from database.db_setup import SessionLocal, Base, engine
 from app.models.user import User
 from app.models.job import Job, JobTypeEnum, RemoteOptionEnum, ExperienceLevelEnum
 from app.models.course import Course, CourseModeEnum
-from app.models.profile import Organization, OrgTypeEnum
+from app.models.organization import Organization, OrgTypeEnum
 from datetime import date
 
 

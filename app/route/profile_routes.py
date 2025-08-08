@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.schemas.profile_schema import OrgProfile
+from app.schemas.organization_schema import OrgProfile
 from app.service import profile_service
 from app.utils.deps import get_db
 
