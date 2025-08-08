@@ -31,5 +31,4 @@ class CourseUpdate(CourseBase):
 class CourseOut(CourseBase):
     id: int = Field(..., description="Unique course identifier")
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}

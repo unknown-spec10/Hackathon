@@ -4,8 +4,8 @@ from app.route import auth_routes, course_routes, job_routes, profile_routes, st
 
 app = FastAPI(title="Hackathon API")
 
-# Create tables (for demo/dev)
-Base.metadata.create_all(bind=engine)
+# Create tables (for demo/dev) - commented out to avoid startup DB connection issues
+# Base.metadata.create_all(bind=engine)
 
 # Routers
 app.include_router(auth_routes.router)

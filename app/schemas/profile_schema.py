@@ -16,8 +16,7 @@ class OrgProfile(BaseModel):
     contact_phone: Optional[str] = Field(None, min_length=7, max_length=20, description="Contact phone number")
     logo_path: Optional[str] = Field(None, description="Path or URL to the organization's logo")
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 
 class OrgProfileUpdate(OrgProfile):

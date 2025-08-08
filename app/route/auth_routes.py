@@ -20,11 +20,42 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Email already registered")
 
     hashed_pw = get_password_hash(user_data.password)
+    
+    # If B2B user, create organization first
+    org_id = None
+    if user_data.user_type.value == "B2B":
+        # Validate required organization fields
+        if not all([user_data.org_name, user_data.org_type, user_data.org_address]):
+            raise HTTPException(
+                status_code=400, 
+                detail="B2B users must provide org_name, org_type, and org_address"
+            )
+        
+        # Create organization
+        from app.models.profile import Organization, OrgTypeEnum
+        try:
+            org_type_enum = OrgTypeEnum.COMPANY if user_data.org_type == "Company" else OrgTypeEnum.INSTITUTION
+        except:
+            raise HTTPException(status_code=400, detail="org_type must be 'Company' or 'Institution'")
+            
+        new_org = Organization(
+            name=user_data.org_name,
+            org_type=org_type_enum,
+            address=user_data.org_address,
+            contact_email=user_data.email,  # Use user's email as org contact
+            contact_phone=user_data.org_contact_phone,
+            logo_path=user_data.org_logo_path
+        )
+        db.add(new_org)
+        db.flush()  # Get the org ID without committing
+        org_id = new_org.id
+
     new_user = User(
         email=user_data.email,
         password_hash=hashed_pw,
         username=user_data.username,
-        org_id=user_data.org_id,
+        org_id=org_id,
+        user_type=user_data.user_type,
     )
     db.add(new_user)
     db.commit()
@@ -38,7 +69,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    access_token = create_access_token(data={"sub": str(user.id)})
+    access_token = create_access_token(data={"sub": str(user.id), "user_type": user.user_type.value})
     return {"access_token": access_token, "token_type": "bearer"}
 
 

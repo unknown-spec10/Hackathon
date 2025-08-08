@@ -52,5 +52,4 @@ class JobUpdate(JobBase):
 class JobOut(JobBase):
     id: int = Field(..., description="Unique job ID")
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}

@@ -1,12 +1,6 @@
 from sqlalchemy import Column, Integer, String, Date, Text, Enum, JSON
 from database.db_setup import Base
-import enum
-
-
-class CourseModeEnum(enum.Enum):
-    ONLINE = "Online"
-    OFFLINE = "Offline"
-    HYBRID = "Hybrid"
+from app.schemas.course_schema import CourseMode
 
 
 class Course(Base):
@@ -15,7 +9,7 @@ class Course(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     duration = Column(String, nullable=False)
-    mode = Column(Enum(CourseModeEnum), nullable=False)
+    mode = Column(Enum(CourseMode), nullable=False)
     fees = Column(String, nullable=True)
     description = Column(Text, nullable=False)
     skills_required = Column(JSON, nullable=False)  
