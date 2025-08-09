@@ -100,144 +100,303 @@ def main():
         elif page == "👤 Authentication":
             st.header("👤 Authentication")
             
-            col1, col2 = st.columns(2)
+            # Initialize session state for authentication flow
+            if 'auth_step' not in st.session_state:
+                st.session_state.auth_step = 'select_type'
+            if 'selected_user_type' not in st.session_state:
+                st.session_state.selected_user_type = None
             
-            with col1:
-                st.subheader("📝 User Signup")
-                with st.form("signup_form"):
-                    email = st.text_input("Email", placeholder="Enter your email address")
-                    password = st.text_input("Password", type="password", placeholder="Enter a secure password (min 6 chars)")
-                    username = st.text_input("Username", placeholder="Enter your username")
-                    user_type = st.selectbox("User Type", ["B2C", "B2B"], help="B2C: Talent users, B2B: Organization users")
-                    
-                    # B2B Organization fields (shown conditionally)
-                    org_name = None
-                    org_type = None
-                    org_address = None
-                    org_contact_phone = None
-                    org_logo_path = None
-                    
-                    if user_type == "B2B":
-                        st.markdown("**Organization Details (Required for B2B)**")
-                        org_name = st.text_input("Organization Name", placeholder="Enter organization name")
-                        org_type = st.selectbox("Organization Type", ["Company", "Institution"])
-                        org_address = st.text_input("Organization Address", placeholder="Enter full address")
-                        org_contact_phone = st.text_input("Contact Phone (Optional)", placeholder="Enter phone number")
-                        org_logo_path = st.text_input("Logo Path/URL (Optional)", placeholder="Enter logo URL or path")
-                    
-                    if st.form_submit_button("Sign Up"):
-                        # Validate required fields
-                        if not email or not password or not username:
-                            st.error("Email, password, and username are required")
-                            st.stop()
+            # Step 1: User Type Selection
+            if st.session_state.auth_step == 'select_type':
+                st.subheader("🔍 Step 1: Select User Type")
+                st.info("First, please confirm if you are a B2B (organization) or B2C (individual) user.")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("### 🏢 B2B (Business)")
+                    st.markdown("""
+                    **For Organizations:**
+                    - Companies (can post jobs)
+                    - Institutions (can set courses)
+                    - Requires: email, phone, org details, address, logo
+                    """)
+                    if st.button("Select B2B", key="select_b2b", use_container_width=True):
+                        st.session_state.selected_user_type = "B2B"
+                        st.session_state.auth_step = 'signup'
+                        st.rerun()
+                
+                with col2:
+                    st.markdown("### 👤 B2C (Individual)")
+                    st.markdown("""
+                    **For Individuals:**
+                    - Personal users looking for jobs/courses
+                    - Requires: personal details according to backend schema
+                    - Skills, experience, bio, etc.
+                    """)
+                    if st.button("Select B2C", key="select_b2c", use_container_width=True):
+                        st.session_state.selected_user_type = "B2C"
+                        st.session_state.auth_step = 'signup'
+                        st.rerun()
+            
+            # Step 2: Registration Form Based on User Type
+            elif st.session_state.auth_step == 'signup':
+                col1, col2 = st.columns([2, 1])
+                
+                with col1:
+                    if st.session_state.selected_user_type == "B2B":
+                        st.subheader("🏢 B2B Organization Registration")
                         
-                        if len(password) < 6:
-                            st.error("Password must be at least 6 characters long")
-                            st.stop()
-                        
-                        try:
-                            # Check if user exists
-                            existing_user = db.query(User).filter(User.email == email).first()
-                            if existing_user:
-                                st.error("Email already registered")
+                        with st.form("b2b_signup_form"):
+                            st.markdown("**User Details**")
+                            email = st.text_input("Email *", placeholder="organization@company.com")
+                            password = st.text_input("Password *", type="password", placeholder="Secure password (min 6 chars)")
+                            username = st.text_input("Username (Optional)", placeholder="Will auto-generate if empty")
+                            
+                            st.markdown("**Organization Details**")
+                            org_name = st.text_input("Organization Name *", placeholder="Your Company/Institution Name")
+                            org_type = st.selectbox("Organization Type *", ["Company", "Institution"], 
+                                                   help="Company: Can post jobs | Institution: Can set courses")
+                            org_address = st.text_input("Address *", placeholder="Full business address")
+                            org_contact_phone = st.text_input("Contact Phone *", placeholder="+1234567890")
+                            org_logo_path = st.text_input("Logo URL (Optional)", placeholder="https://example.com/logo.png")
+                            
+                            st.markdown("**Permissions:**")
+                            if org_type == "Company":
+                                st.success("✅ This organization will be able to **post jobs**")
                             else:
-                                # Validate B2B requirements
-                                if user_type == "B2B" and not all([org_name, org_type, org_address]):
-                                    st.error("B2B users must provide organization name, type, and address")
+                                st.success("✅ This organization will be able to **set courses**")
+                            
+                            if st.form_submit_button("Register B2B Organization", use_container_width=True):
+                                # Validate required fields
+                                if not all([email, password, org_name, org_address, org_contact_phone]):
+                                    st.error("❌ All required fields (*) must be filled")
                                     st.stop()
                                 
-                                # Create organization if B2B
-                                org_id = None
-                                if user_type == "B2B":
-                                    from app.models.profile import Organization, OrgTypeEnum
-                                    org_type_enum = OrgTypeEnum.COMPANY if org_type == "Company" else OrgTypeEnum.INSTITUTION
-                                    
-                                    new_org = Organization(
-                                        name=org_name,
-                                        org_type=org_type_enum,
-                                        address=org_address,
-                                        contact_email=email,  # Use user email as org contact
-                                        contact_phone=org_contact_phone if org_contact_phone else None,
-                                        logo_path=org_logo_path if org_logo_path else None
-                                    )
-                                    db.add(new_org)
-                                    db.flush()  # Get org ID without committing
-                                    org_id = new_org.id
+                                if len(password) < 6:
+                                    st.error("❌ Password must be at least 6 characters long")
+                                    st.stop()
                                 
-                                # Create new user
-                                from app.models.user import UserTypeEnum
-                                user_type_enum = UserTypeEnum.B2B if user_type == "B2B" else UserTypeEnum.B2C
-                                
-                                hashed_password = get_password_hash(password)
-                                new_user = User(
-                                    email=email,
-                                    password_hash=hashed_password,
-                                    username=username,
-                                    org_id=org_id,
-                                    user_type=user_type_enum
-                                )
-                                db.add(new_user)
-                                db.commit()
-                                db.refresh(new_user)
-                                
-                                st.success("✅ User registered successfully!")
-                                st.success("Status: 201")
-                                user_response = {
-                                    "id": new_user.id,
-                                    "email": new_user.email,
-                                    "username": new_user.username,
-                                    "org_id": new_user.org_id,
-                                    "user_type": new_user.user_type.value
-                                }
-                                
-                                if user_type == "B2B" and org_id:
-                                    user_response["organization"] = {
-                                        "id": new_org.id,
-                                        "name": new_org.name,
-                                        "type": new_org.org_type.value
-                                    }
-                                    st.success(f"🏢 Organization '{new_org.name}' created with ID: {new_org.id}")
-                                
-                                st.json(user_response)
-                                
-                        except Exception as e:
-                            st.error(f"Error: {str(e)}")
-            
-            with col2:
-                st.subheader("🔐 User Login")
-                with st.form("login_form"):
-                    login_email = st.text_input("Email/Username", placeholder="Enter your email address")
-                    login_password = st.text_input("Password", type="password", placeholder="Enter your password")
+                                try:
+                                    # Check if user exists
+                                    existing_user = db.query(User).filter(User.email == email).first()
+                                    if existing_user:
+                                        st.error("❌ Email already registered")
+                                    else:
+                                        # Create organization first
+                                        from app.models.profile import Organization, OrgTypeEnum
+                                        org_type_enum = OrgTypeEnum.COMPANY if org_type == "Company" else OrgTypeEnum.INSTITUTION
+                                        
+                                        new_org = Organization(
+                                            name=org_name,
+                                            org_type=org_type_enum,
+                                            address=org_address,
+                                            contact_email=email,
+                                            contact_phone=org_contact_phone,
+                                            logo_path=org_logo_path if org_logo_path else None
+                                        )
+                                        db.add(new_org)
+                                        db.flush()  # Get org ID without committing
+                                        
+                                        # Create B2B user
+                                        from app.models.user import UserTypeEnum
+                                        hashed_password = get_password_hash(password)
+                                        new_user = User(
+                                            email=email,
+                                            password_hash=hashed_password,
+                                            username=username or f"org_{new_org.id}",
+                                            org_id=new_org.id,
+                                            user_type=UserTypeEnum.B2B
+                                        )
+                                        db.add(new_user)
+                                        db.commit()
+                                        db.refresh(new_user)
+                                        
+                                        st.success("✅ B2B Organization registered successfully!")
+                                        st.success("Status: 201")
+                                        
+                                        response_data = {
+                                            "id": new_user.id,
+                                            "email": new_user.email,
+                                            "username": new_user.username,
+                                            "user_type": new_user.user_type.value,
+                                            "org_id": new_user.org_id,
+                                            "organization": {
+                                                "id": new_org.id,
+                                                "name": new_org.name,
+                                                "type": new_org.org_type.value,
+                                                "address": new_org.address,
+                                                "phone": new_org.contact_phone,
+                                                "permissions": f"Can post {('jobs' if org_type == 'Company' else 'courses')}"
+                                            }
+                                        }
+                                        st.json(response_data)
+                                        
+                                        # Reset auth flow
+                                        st.session_state.auth_step = 'login'
+                                        st.balloons()
+                                        
+                                except Exception as e:
+                                    st.error(f"❌ Registration failed: {str(e)}")
                     
-                    if st.form_submit_button("Login"):
-                        # Validate required fields
-                        if not login_email or not login_password:
-                            st.error("Email and password are required")
-                            st.stop()
+                    else:  # B2C Registration
+                        st.subheader("👤 B2C Personal Registration")
                         
-                        try:
-                            # Find user
-                            user = db.query(User).filter(User.email == login_email).first()
-                            if user and verify_password(login_password, user.password_hash):
-                                # Create token
-                                token = create_access_token(data={"sub": str(user.id), "user_type": user.user_type.value})
-                                st.session_state.auth_token = token
-                                st.session_state.current_user_type = user.user_type.value
-                                st.session_state.current_user_id = user.id
+                        with st.form("b2c_signup_form"):
+                            st.markdown("**Personal Details**")
+                            email = st.text_input("Email *", placeholder="your.email@example.com")
+                            password = st.text_input("Password *", type="password", placeholder="Secure password (min 6 chars)")
+                            username = st.text_input("Username *", placeholder="Your unique username")
+                            full_name = st.text_input("Full Name", placeholder="Your full name")
+                            phone = st.text_input("Phone", placeholder="+1234567890")
+                            location = st.text_input("Location", placeholder="City, Country")
+                            
+                            st.markdown("**Professional Details**")
+                            bio = st.text_area("Bio", placeholder="Tell us about yourself...")
+                            skills = st.text_input("Skills", placeholder="Python, React, Data Science (comma separated)")
+                            experience_years = st.number_input("Years of Experience", min_value=0, max_value=50, value=0)
+                            
+                            if st.form_submit_button("Register B2C User", use_container_width=True):
+                                # Validate required fields
+                                if not all([email, password, username]):
+                                    st.error("❌ Email, password, and username are required")
+                                    st.stop()
                                 
-                                st.success("✅ Login successful!")
-                                st.success("Status: 200")
-                                st.json({
-                                    "access_token": token,
-                                    "token_type": "bearer",
-                                    "user_type": user.user_type.value,
-                                    "user_id": user.id
-                                })
-                                st.success("✅ Token stored in session!")
-                            else:
-                                st.error("❌ Invalid credentials")
-                        except Exception as e:
-                            st.error(f"Error: {str(e)}")
+                                if len(password) < 6:
+                                    st.error("❌ Password must be at least 6 characters long")
+                                    st.stop()
+                                
+                                try:
+                                    # Check if user exists
+                                    existing_user = db.query(User).filter(User.email == email).first()
+                                    if existing_user:
+                                        st.error("❌ Email already registered")
+                                    else:
+                                        # Create B2C user
+                                        from app.models.user import UserTypeEnum
+                                        hashed_password = get_password_hash(password)
+                                        new_user = User(
+                                            email=email,
+                                            password_hash=hashed_password,
+                                            username=username,
+                                            org_id=None,
+                                            user_type=UserTypeEnum.B2C,
+                                            full_name=full_name,
+                                            phone=phone,
+                                            location=location,
+                                            bio=bio,
+                                            skills=skills,  # Store as string, can be JSON
+                                            experience_years=experience_years
+                                        )
+                                        db.add(new_user)
+                                        db.commit()
+                                        db.refresh(new_user)
+                                        
+                                        st.success("✅ B2C User registered successfully!")
+                                        st.success("Status: 201")
+                                        
+                                        response_data = {
+                                            "id": new_user.id,
+                                            "email": new_user.email,
+                                            "username": new_user.username,
+                                            "user_type": new_user.user_type.value,
+                                            "full_name": new_user.full_name,
+                                            "location": new_user.location,
+                                            "experience_years": new_user.experience_years,
+                                            "skills": new_user.skills
+                                        }
+                                        st.json(response_data)
+                                        
+                                        # Reset auth flow
+                                        st.session_state.auth_step = 'login'
+                                        st.balloons()
+                                        
+                                except Exception as e:
+                                    st.error(f"❌ Registration failed: {str(e)}")
+                
+                with col2:
+                    st.markdown("### 🔄 Change User Type")
+                    if st.button("← Back to User Type Selection", key="back_to_select"):
+                        st.session_state.auth_step = 'select_type'
+                        st.session_state.selected_user_type = None
+                        st.rerun()
+                    
+                    st.markdown("### ℹ️ Registration Info")
+                    if st.session_state.selected_user_type == "B2B":
+                        st.info("""
+                        **B2B Registration Requirements:**
+                        - Valid email and secure password
+                        - Organization name and type
+                        - Business address and phone
+                        - Optional logo URL
+                        """)
+                    else:
+                        st.info("""
+                        **B2C Registration Requirements:**
+                        - Valid email and secure password
+                        - Unique username
+                        - Optional: personal and professional details
+                        """)
+            
+            # Step 3: Login (always available)
+            if st.session_state.auth_step in ['login', 'signup']:
+                st.markdown("---")
+                st.subheader("🔐 User Login")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    with st.form("login_form"):
+                        login_email = st.text_input("Email", placeholder="Enter your email address")
+                        login_password = st.text_input("Password", type="password", placeholder="Enter your password")
+                        
+                        if st.form_submit_button("Login", use_container_width=True):
+                            # Validate required fields
+                            if not login_email or not login_password:
+                                st.error("❌ Email and password are required")
+                                st.stop()
+                            
+                            try:
+                                # Find user
+                                user = db.query(User).filter(User.email == login_email).first()
+                                if user and verify_password(login_password, user.password_hash):
+                                    # Create token
+                                    token = create_access_token(data={"sub": str(user.id), "user_type": user.user_type.value})
+                                    st.session_state.auth_token = token
+                                    st.session_state.current_user_type = user.user_type.value
+                                    st.session_state.current_user_id = user.id
+                                    
+                                    st.success("✅ Login successful!")
+                                    st.success("Status: 200")
+                                    
+                                    login_response = {
+                                        "access_token": token,
+                                        "token_type": "bearer",
+                                        "user_type": user.user_type.value,
+                                        "user_id": user.id
+                                    }
+                                    
+                                    # Add organization info for B2B users
+                                    if user.user_type.value == "B2B" and user.org_id:
+                                        org = db.query(Organization).filter(Organization.id == user.org_id).first()
+                                        if org:
+                                            login_response["organization"] = {
+                                                "id": org.id,
+                                                "name": org.name,
+                                                "type": org.org_type.value
+                                            }
+                                    
+                                    st.json(login_response)
+                                    st.success("✅ Token stored in session!")
+                                else:
+                                    st.error("❌ Invalid credentials")
+                            except Exception as e:
+                                st.error(f"❌ Login error: {str(e)}")
+                
+                with col2:
+                    if st.button("🔄 New Registration", key="new_reg"):
+                        st.session_state.auth_step = 'select_type'
+                        st.session_state.selected_user_type = None
+                        st.rerun()
             
             # Test /me endpoint
             st.subheader("👤 Get Current User")

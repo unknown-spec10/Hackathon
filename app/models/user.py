@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, Integer, String, Enum
+from sqlalchemy import Column, Integer, String, Enum, Text
 from database.db_setup import Base
 
 
@@ -17,3 +17,11 @@ class User(Base):
     org_id = Column(Integer)  
     email = Column(String, unique=True, nullable=False)
     user_type = Column(Enum(UserTypeEnum), nullable=False, default=UserTypeEnum.B2C)
+    
+    # B2C Personal details
+    full_name = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    location = Column(String, nullable=True)
+    bio = Column(Text, nullable=True)
+    skills = Column(Text, nullable=True)  # JSON string of skills array
+    experience_years = Column(Integer, default=0)
