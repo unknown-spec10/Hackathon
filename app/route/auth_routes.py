@@ -15,21 +15,25 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 @router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def signup(user_data: UserCreate, db: Session = Depends(get_db)):
+    # Check if email already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
-
-    hashed_pw = get_password_hash(user_data.password)
-    new_user = User(
-        email=user_data.email,
-        password_hash=hashed_pw,
-        username=user_data.username,
-        org_id=user_data.org_id,
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    return new_user
+    
+    # Validate organization for B2B users
+    if user_data.user_type == "B2B" and user_data.organization_id:
+        from app.models.organization import Organization
+        org = db.query(Organization).filter(Organization.id == user_data.organization_id).first()
+        if not org:
+            raise HTTPException(status_code=404, detail="Organization not found")
+    
+    # Create user using repository
+    from app.repositories.user_repo import create_user
+    try:
+        new_user = create_user(db, user_data)
+        return new_user
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/login", response_model=Token)

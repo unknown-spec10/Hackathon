@@ -12,7 +12,9 @@ class User(Base):
     password_hash = Column(String(128), nullable=False, comment="Hashed user password")
     full_name = Column(String(100), nullable=False, index=True, comment="Full name of the user")
     user_type = Column(Enum(UserType), nullable=False, comment="User type (B2B or B2C)")
-
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, comment="Organization ID for B2B users")
+    
+    # Relationships
     organization = relationship("Organization", back_populates="users")
 
     @validates("email", "full_name")

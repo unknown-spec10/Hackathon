@@ -10,12 +10,18 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def create_user(db: Session, user: UserCreate) -> UserResponse:
     try:
         hashed_password = pwd_context.hash(user.password)
-        db_user = User(
-            email=user.email,
-            password_hash=hashed_password,
-            full_name=user.full_name,
-            user_type=user.user_type
-        )
+        user_data = {
+            "email": user.email,
+            "password_hash": hashed_password,
+            "full_name": user.full_name,
+            "user_type": user.user_type
+        }
+        
+        # Add organization_id for B2B users
+        if user.user_type == "B2B" and user.organization_id:
+            user_data["organization_id"] = user.organization_id
+            
+        db_user = User(**user_data)
         db.add(db_user)
         db.commit()
         db.refresh(db_user)

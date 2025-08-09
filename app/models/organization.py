@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Enum
-from sqlalchemy.orm import validates
+from sqlalchemy.orm import validates, relationship
 from database.db_setup import Base
 from schemas.organization_schema import OrgType as OrgTypeEnum 
 
@@ -14,6 +14,9 @@ class Organization(Base):
     contact_email = Column(String(100), nullable=False, index=True, comment="Contact email")
     contact_phone = Column(String(20), nullable=True, comment="Contact phone number")
     logo_path = Column(String(200), nullable=True, comment="URL or path to organization logo")
+    
+    # Relationships
+    users = relationship("User", back_populates="organization")
 
     @validates("name", "address")
     def validate_non_empty(self, key, value):
