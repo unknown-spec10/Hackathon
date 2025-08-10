@@ -45,7 +45,7 @@ def main():
     try:
         # Import core functions
         from database.db_setup import Base, engine
-        from app.service import course_service, job_service, profile_service
+        from app.services import course_service, job_service, profile_service
         from app.schemas.course_schema import CourseCreate
         from app.schemas.job_schema import JobCreate
         from app.utils.auth import get_password_hash, create_access_token, verify_password
