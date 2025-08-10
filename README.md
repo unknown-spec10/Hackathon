@@ -1,23 +1,24 @@
-# 🚀 Hackathon API
+# 🚀 Job & Course Platform with AI Resume Processing
 
-A comprehensive FastAPI-based REST API for job and course management platform, built for hackathon projects.
+A comprehensive FastAPI-based platform for job and course management with intelligent B2C resume processing using LangGraph and AI recommendations.
 
 ## 📋 Features
 
-- **Authentication**: JWT-based user authentication with bcrypt password hashing
-- **User Management**: User registration, login, and profile management
-- **Course Management**: Create, read, update, delete courses with skills tracking
-- **Job Management**: Comprehensive job posting system with various job types
-- **Organization Profiles**: Company and institution profile management
-- **Statistics**: View tracking and analytics for jobs and courses
-- **Modern UI**: Streamlit-based web interface for testing (Direct Function Calls)
+- **Role-Based Authentication**: Separate B2B (companies/institutions) and B2C (individuals) user flows
+- **AI Resume Processing**: LangGraph + Groq AI-powered resume parsing and analysis
+- **Intelligent Recommendations**: AI-powered job and course recommendations based on resume analysis
+- **B2B Features**: Companies can post jobs, institutions can create courses
+- **B2C Features**: Individuals can upload resumes, get recommendations, apply for jobs/courses
+- **Modern UI**: Streamlit-based comprehensive testing interface
 
 ## 🏗️ Architecture
 
 - **Framework**: FastAPI with SQLAlchemy ORM
-- **Database**: PostgreSQL (with SQLite fallback for development)
-- **Authentication**: JWT with bcrypt
-- **UI**: Streamlit web interface (Direct Function Calls - No HTTP Server Required)
+- **Database**: SQLite for development
+- **Authentication**: JWT with bcrypt + Role-based access (B2B/B2C)
+- **AI Engine**: LangGraph workflows with Groq LLM (mixtral-8x7b-32768)
+- **PDF Processing**: PDFPlumber for resume text extraction
+- **UI**: Streamlit comprehensive testing interface
 - **Documentation**: Auto-generated OpenAPI/Swagger docs
 
 ## 🚀 Quick Start
@@ -28,225 +29,193 @@ A comprehensive FastAPI-based REST API for job and course management platform, b
 pip install -r requirements.txt
 ```
 
-### 2. Set Up Database
+### 2. Set Up Environment
 
-For development, the API uses SQLite by default. For production, set up PostgreSQL and update the `DATABASE_URL` in `app/core/settings.py`.
+Create a `.env` file with your Groq API key:
 
-### 3. Start the Streamlit UI (Recommended)
-
-```bash
-python start_direct_ui.py
+```env
+GROQ_API_KEY=your_groq_api_key_here
+SECRET_KEY=your-secret-key-here
 ```
 
-The UI will be available at: http://localhost:8501
+### 3. Initialize Database
 
-**No API server required!** The UI uses direct function calls to test all functionality.
+```bash
+python create_tables.py
+```
 
-### 4. Start the API Server (Optional)
+### 4. Start the Application
 
+**Option 1: Streamlit UI (Recommended for Testing)**
+```bash
+streamlit run app_ui.py
+```
+Access at: http://localhost:8501
+
+**Option 2: FastAPI Server**
 ```bash
 python start_server.py
 ```
+Access at: http://localhost:8000
 
-The API will be available at:
-- **API Root**: http://localhost:8000/
-- **Documentation**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+## 🎯 User Flows
 
-## 📊 API Endpoints
+### B2B Users (Companies & Institutions)
+1. **Register as B2B** → Access company/institution features
+2. **Post Jobs** (Companies) → Create job listings with requirements
+3. **Create Courses** (Institutions) → Setup educational programs
+4. **View Analytics** → Track job/course performance
 
-### Authentication
-- `POST /auth/signup` - User registration
-- `POST /auth/login` - User login
-- `GET /auth/me` - Get current user (requires authentication)
+### B2C Users (Individuals)
+1. **Register as B2C** → Access individual features
+2. **Upload Resume** → AI-powered parsing with LangGraph + Groq
+3. **Get Recommendations** → AI suggests matching jobs and courses
+4. **Apply & Enroll** → Submit applications and course enrollments
 
-### Courses
-- `GET /courses/` - List all courses
-- `POST /courses/` - Create a new course
-- `GET /courses/{id}` - Get specific course
-- `PUT /courses/{id}` - Update course
-- `DELETE /courses/{id}` - Delete course
+## 🤖 AI Resume Processing
 
-### Jobs
-- `GET /jobs/` - List all jobs
-- `POST /jobs/` - Create a new job
-- `GET /jobs/{id}` - Get specific job
-- `PUT /jobs/{id}` - Update job
-- `DELETE /jobs/{id}` - Delete job
+### LangGraph Workflow
+- **State Management**: Tracks parsing progress and data
+- **Multi-Step Processing**: Extract → Analyze → Structure → Validate
+- **Error Handling**: Robust error recovery and retry logic
+- **Confidence Scoring**: AI confidence in parsing accuracy
 
-### Organizations
-- `GET /profile/{org_id}` - Get organization profile
-- `PUT /profile/{org_id}` - Update organization profile
-
-### Statistics
-- `GET /stats/jobs/{job_id}` - Get job statistics
-- `GET /stats/courses/{course_id}` - Get course statistics
-
-## 🧪 Testing
-
-### Test with Streamlit UI (Recommended)
-
-```bash
-python start_direct_ui.py
-```
-
-Then open http://localhost:8501 in your browser and use the interactive UI to test all functionality.
-
-### Test the API Server
-
-```bash
-python test_server.py
-```
-
-### Test the API with HTTP Server
-
-1. Start the API server: `python start_server.py`
-2. Open http://localhost:8000/docs in your browser
-3. Use the interactive API documentation
+### Groq AI Integration
+- **Model**: mixtral-8x7b-32768 (fast inference)
+- **Features**: Text extraction, skill identification, experience analysis
+- **Output**: Structured resume data with confidence scores
 
 ## 📁 Project Structure
 
 ```
 ├── app/
-│   ├── core/          # Settings and configuration
-│   ├── models/        # SQLAlchemy models
-│   ├── repositories/  # Data access layer
-│   ├── route/         # API endpoints
-│   ├── schemas/       # Pydantic schemas
-│   ├── service/       # Business logic
-│   └── utils/         # Auth utilities
-├── database/          # DB setup and seeding
-├── tests/            # Test suite
-├── streamlit_ui_direct.py   # Streamlit UI (Direct Functions)
-├── start_direct_ui.py       # UI startup script
-├── start_server.py   # API server startup
-└── test_server.py    # API testing script
+│   ├── core/                    # Settings and configuration
+│   ├── models/                  # SQLAlchemy models (User, Job, Course, Resume)
+│   ├── repositories/            # Data access layer
+│   ├── schemas/                 # Pydantic schemas
+│   ├── services/               # Business logic
+│   │   ├── langgraph_resume_parser.py  # AI resume parsing
+│   │   ├── job_recommender.py          # Job recommendation engine
+│   │   ├── course_recommender.py       # Course recommendation engine
+│   │   └── pdf_processor.py            # PDF text extraction
+│   ├── uploads/resumes/        # Resume file storage
+│   └── utils/                  # Authentication utilities
+├── database/                   # Database setup and seeding
+├── app_ui.py                  # Main Streamlit UI application
+├── main.py                    # FastAPI application
+├── start_server.py           # API server startup
+├── create_tables.py          # Database initialization
+└── clear_database.py         # Database cleanup utility
 ```
 
-## 🔧 Development
+## 🔧 API Endpoints
 
-### Database Models
+### Authentication
+- `POST /auth/register` - User registration (B2B/B2C)
+- `POST /auth/login` - User login
+- `GET /auth/me` - Get current user profile
 
-- **User**: User accounts with email/password authentication
-- **Organization**: Companies and institutions
-- **Course**: Educational courses with skills and prerequisites
-- **Job**: Job postings with comprehensive details
+### B2B Endpoints
+- `POST /jobs/` - Create job posting (companies)
+- `POST /courses/` - Create course (institutions)
+- `GET /jobs/company/{company_id}` - Get company jobs
+- `GET /courses/institution/{institution_id}` - Get institution courses
 
-### Key Features
+### B2C Endpoints
+- `POST /resumes/upload` - Upload and process resume
+- `GET /resumes/recommendations` - Get AI recommendations
+- `POST /jobs/{job_id}/apply` - Apply for job
+- `POST /courses/{course_id}/enroll` - Enroll in course
 
-- **View Tracking**: Both jobs and courses track view counts
-- **Skills Management**: JSON-based skills tracking
-- **Authentication**: JWT token-based security
-- **Validation**: Comprehensive Pydantic schema validation
-- **Error Handling**: Proper HTTP status codes and error messages
-- **Direct Function Testing**: Streamlit UI that bypasses HTTP server
+### General
+- `GET /jobs/` - List all jobs
+- `GET /courses/` - List all courses
+- `GET /stats/` - Platform analytics
 
-## 🎯 Example Usage
+## 🎮 Testing with Streamlit UI
 
-### Using the Streamlit UI
+The comprehensive Streamlit UI provides:
 
-1. Start the UI: `python start_direct_ui.py`
-2. Open http://localhost:8501
-3. Use the sidebar to navigate between different functions
-4. Test all API functionality through the interactive interface
+1. **Authentication Testing**
+   - B2B/B2C registration and login flows
+   - Role-based feature access
 
-### Using the API Server
+2. **B2B Testing**
+   - Job posting (companies)
+   - Course creation (institutions)
+   - Analytics dashboard
 
-```bash
-# Create a User
-curl -X POST "http://localhost:8000/auth/signup" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@example.com",
-    "password": "securepass123",
-    "username": "testuser"
-  }'
+3. **B2C Testing**
+   - Resume upload and AI processing
+   - AI-powered recommendations
+   - Application and enrollment
 
-# Create a Course
-curl -X POST "http://localhost:8000/courses/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Introduction to APIs",
-    "duration": "4 weeks",
-    "mode": "Online",
-    "fees": "Free",
-    "description": "Learn to build APIs with FastAPI",
-    "skills_required": ["Python", "FastAPI"],
-    "application_deadline": "2025-12-31",
-    "prerequisites": ["Basics of Python"]
-  }'
+4. **Admin Features**
+   - User management
+   - System statistics
+   - Database operations
 
-# Create a Job
-curl -X POST "http://localhost:8000/jobs/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Backend Engineer",
-    "job_type": "Full-time",
-    "location": "Remote",
-    "salary_range": "$80k-$120k",
-    "skills_required": ["Python", "FastAPI", "SQL"],
-    "application_deadline": "2025-11-30",
-    "industry": "Software",
-    "remote_option": "Remote",
-    "experience_level": "Mid",
-    "number_of_openings": 2
-  }'
-```
+## 🔍 AI Recommendation System
 
-## 🛠️ Configuration
+### Job Recommendations
+- **Skill Matching**: Compare resume skills with job requirements
+- **Experience Level**: Match career level with job seniority
+- **Industry Alignment**: Consider industry preferences and experience
+- **Location Preference**: Factor in location and remote options
 
-### Environment Variables
+### Course Recommendations
+- **Skill Gap Analysis**: Identify missing skills for career growth
+- **Career Path**: Suggest courses for desired career progression
+- **Industry Trends**: Recommend trending skills in user's field
+- **Learning Level**: Match course difficulty with user experience
 
-Create a `.env` file in the project root:
+## 🔒 Security & Authentication
 
-```env
-DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5432/hackathon_db
-SECRET_KEY=your-secret-key-here
-ACCESS_TOKEN_EXPIRE_MINUTES=60
-ALGORITHM=HS256
-```
-
-### Database Setup
-
-For development, SQLite is used by default. For production:
-
-1. Install PostgreSQL
-2. Create a database
-3. Update `DATABASE_URL` in settings
-4. Run database migrations
-
-## 📈 Statistics
-
-The API tracks:
-- **Views**: Number of times jobs/courses are viewed
-- **Applications**: Job applications and course enrollments
-- **Skills Matching**: Skills-based analytics
-- **Education Matching**: Education level analytics
-
-## 🔒 Security
-
-- **Password Hashing**: bcrypt with salt
+- **Role-Based Access**: Separate B2B and B2C feature access
 - **JWT Tokens**: Secure token-based authentication
-- **Input Validation**: Pydantic schema validation
-- **Error Handling**: Secure error responses
+- **Password Hashing**: bcrypt with salt
+- **File Upload Security**: Safe resume file handling
+- **API Rate Limiting**: Prevent abuse
 
-## 🎉 Success!
+## 🚀 Getting Started Examples
 
-The Hackathon API is now fully functional with:
+### B2C User Journey
+```python
+# 1. Register as B2C user
+# 2. Upload resume (PDF)
+# 3. AI processes resume with LangGraph + Groq
+# 4. Get personalized job/course recommendations
+# 5. Apply for jobs or enroll in courses
+```
 
-✅ **Streamlit UI**: Running on http://localhost:8501 (Direct Functions)  
-✅ **API Server**: Available on http://localhost:8000 (Optional)  
-✅ **Documentation**: Available at http://localhost:8000/docs  
-✅ **Database**: SQLite for development  
-✅ **Authentication**: JWT-based security  
-✅ **Testing**: Comprehensive test suite  
-✅ **No HTTP Server Required**: Direct function calls for testing  
+### B2B User Journey
+```python
+# 1. Register as company/institution
+# 2. Create job postings or courses
+# 3. View applications and enrollments
+# 4. Access analytics and insights
+```
 
-**Recommended Workflow:**
-1. Start the Streamlit UI: `python start_direct_ui.py`
-2. Open http://localhost:8501
-3. Test all functionality through the beautiful web interface
-4. No need to start the API server for testing!
+## 🎯 Success Metrics
+
+✅ **AI Resume Processing**: LangGraph + Groq integration  
+✅ **Role-Based Authentication**: B2B/B2C separation  
+✅ **Intelligent Recommendations**: AI-powered matching  
+✅ **Comprehensive UI**: Full-featured Streamlit interface  
+✅ **File Processing**: PDF resume handling  
+✅ **Database Integration**: Complete data persistence  
+✅ **Error Handling**: Robust error management  
+
+## 🔮 Future Enhancements
+
+- **Real-time Notifications**: Job/course alerts
+- **Advanced Analytics**: ML-powered insights
+- **Video Resume Support**: Extended media processing
+- **Integration APIs**: Third-party platform connections
+- **Mobile App**: React Native application
+
+---
+
+**Start Testing**: `streamlit run app_ui.py` → http://localhost:8501
 
 Happy coding! 🚀
-

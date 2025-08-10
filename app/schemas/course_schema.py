@@ -32,3 +32,8 @@ class CourseOut(CourseBase):
     id: int = Field(..., description="Unique course identifier")
 
     model_config = {"from_attributes": True}
+
+class CourseResponse(CourseBase):
+    id: int = Field(..., description="Unique course identifier")
+
+    model_config = {"from_attributes": True}

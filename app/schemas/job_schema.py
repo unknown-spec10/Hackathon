@@ -53,3 +53,8 @@ class JobOut(JobBase):
     id: int = Field(..., description="Unique job ID")
 
     model_config = {"from_attributes": True}
+
+class JobResponse(JobBase):
+    id: int = Field(..., description="Unique job ID")
+
+    model_config = {"from_attributes": True}

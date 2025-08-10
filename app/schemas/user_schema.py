@@ -73,7 +73,7 @@ class UserCreate(BaseModel):
     skills: Optional[str] = None
     experience_years: Optional[int] = Field(ge=0, default=0)
     
-    @root_validator
+    @root_validator(skip_on_failure=True)
     def validate_user_fields(cls, values):
         user_type = values.get('user_type')
         
@@ -106,6 +106,12 @@ class UserResponse(BaseModel):
     experience_years: Optional[int] = None
 
     model_config = {"from_attributes": True}
+
+
+class UserLogin(BaseModel):
+    """User login schema"""
+    email: str = Field(..., description="User email address")
+    password: str = Field(..., min_length=6, description="User password")
 
 
 class UserTypeSelectionResponse(BaseModel):

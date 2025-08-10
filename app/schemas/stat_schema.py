@@ -30,3 +30,9 @@ class CourseStats(BaseModel):
         default_factory=dict,
         description="Mapping of skill to applicant count"
     )
+
+class JobStatsResponse(JobStats):
+    model_config = {"from_attributes": True}
+
+class CourseStatsResponse(CourseStats):
+    model_config = {"from_attributes": True}

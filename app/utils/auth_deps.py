@@ -1,14 +1,19 @@
 from fastapi import HTTPException, Depends, status
+from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from app.utils.deps import get_db
 from app.utils.auth import decode_access_token
 from app.models.user import User, UserTypeEnum
-from app.route.auth_routes import oauth2_scheme
+
+# OAuth2 scheme for Bearer token
+oauth2_scheme = HTTPBearer()
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     """Get the current authenticated user from token."""
-    payload = decode_access_token(token)
+    # Extract token from HTTPBearer
+    access_token = token.credentials
+    payload = decode_access_token(access_token)
     if not payload or "sub" not in payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -1,5 +1,6 @@
 import enum
 from sqlalchemy import Column, Integer, String, Enum, Text
+from sqlalchemy.orm import relationship
 from database.db_setup import Base
 
 
@@ -25,3 +26,6 @@ class User(Base):
     bio = Column(Text, nullable=True)
     skills = Column(Text, nullable=True)  # JSON string of skills array
     experience_years = Column(Integer, default=0)
+    
+    # Relationships
+    resumes = relationship("Resume", back_populates="user")

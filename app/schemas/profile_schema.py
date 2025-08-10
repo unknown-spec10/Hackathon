@@ -27,3 +27,15 @@ class ChangePassword(BaseModel):
     old_password: str = Field(..., min_length=6, description="Current password")
     new_password: str = Field(..., min_length=6, description="New password")
 
+class ProfileResponse(OrgProfile):
+    id: int = Field(..., description="Organization profile ID")
+
+    model_config = {"from_attributes": True}
+
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=2, description="Organization name")
+    address: Optional[str] = Field(None, min_length=5, description="Organization address")
+    contact_email: Optional[EmailStr] = Field(None, description="Contact email")
+    contact_phone: Optional[str] = Field(None, min_length=7, max_length=20, description="Contact phone number")
+    logo_path: Optional[str] = Field(None, description="Path or URL to the organization's logo")
+
