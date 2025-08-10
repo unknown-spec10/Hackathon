@@ -1,10 +1,10 @@
 """
 Hackathon API Main Application
-FastAPI backend with user management, resume processing, and AI recommendations.
+FastAPI backend with user management, resume processing, AI recommendations, and technical interviews.
 """
 from fastapi import FastAPI
 from database.db_setup import Base, engine
-from app.routes import auth_routes, course_routes, job_routes, profile_routes, stat_route, resume_routes
+from app.routes import auth_routes, course_routes, job_routes, profile_routes, stat_route, resume_routes, interview_routes
 
 app = FastAPI(title="Hackathon API")
 
@@ -18,7 +18,8 @@ app.include_router(job_routes.router)
 app.include_router(profile_routes.router)
 app.include_router(stat_route.router)
 app.include_router(resume_routes.router)
+app.include_router(interview_routes.router)  # Technical interview chatbot
 
 @app.get("/")
 def root():
-    return {"status": "ok", "message": "Hackathon API is running"}
+    return {"status": "ok", "message": "Hackathon API with Interview Chatbot is running"}
