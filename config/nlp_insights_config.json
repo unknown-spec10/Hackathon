@@ -1,0 +1,102 @@
+{
+  "skill_categories": {
+    "programming": [
+      "python", "java", "javascript", "typescript", "c++", "c#", "php", "ruby", "go", "rust",
+      "kotlin", "swift", "scala", "r", "matlab", "sql", "html", "css"
+    ],
+    "data_science": [
+      "machine learning", "deep learning", "data science", "data analysis",
+      "statistics", "pandas", "numpy", "scikit-learn", "tensorflow", "pytorch",
+      "keras", "matplotlib", "seaborn", "tableau", "power bi"
+    ],
+    "cloud_devops": [
+      "aws", "azure", "gcp", "docker", "kubernetes", "jenkins", "git",
+      "terraform", "ansible", "linux", "bash", "ci/cd", "devops", "microservices"
+    ],
+    "web_development": [
+      "react", "angular", "vue", "node.js", "express", "django", "flask",
+      "spring", "bootstrap", "jquery", "rest api", "graphql"
+    ],
+    "mobile_development": [
+      "android", "ios", "react native", "flutter", "xamarin", "swift", "kotlin"
+    ],
+    "ai_ml": [
+      "artificial intelligence", "machine learning", "deep learning", "nlp",
+      "computer vision", "neural networks", "chatgpt", "llm", "generative ai"
+    ],
+    "blockchain": [
+      "blockchain", "ethereum", "smart contracts", "solidity", "web3", "defi", "nft"
+    ],
+    "cybersecurity": [
+      "cybersecurity", "penetration testing", "ethical hacking", "security audit", 
+      "firewall", "encryption", "vulnerability assessment"
+    ],
+    "soft_skills": [
+      "leadership", "teamwork", "communication", "problem solving",
+      "project management", "analytical thinking", "creativity", "adaptability"
+    ]
+  },
+  "seniority_indicators": {
+    "junior": ["intern", "junior", "trainee", "associate", "entry level", "fresher", "graduate"],
+    "mid": ["developer", "engineer", "analyst", "specialist", "consultant", "coordinator"],
+    "senior": ["senior", "lead", "principal", "architect", "manager", "head", "supervisor"],
+    "executive": ["director", "vp", "cto", "ceo", "founder", "executive", "chief"]
+  },
+  "industry_keywords": {
+    "fintech": ["banking", "finance", "payment", "blockchain", "cryptocurrency", "fintech"],
+    "healthcare": ["medical", "healthcare", "hospital", "clinical", "pharmaceutical", "biotech"],
+    "ecommerce": ["retail", "ecommerce", "marketplace", "shopping", "commerce"],
+    "education": ["education", "learning", "university", "school", "training", "edtech"],
+    "gaming": ["game", "gaming", "entertainment", "mobile games", "unity", "gamedev"],
+    "ai_ml": ["artificial intelligence", "machine learning", "ai", "ml", "nlp", "computer vision"],
+    "consulting": ["consulting", "advisory", "strategy", "business analysis"],
+    "manufacturing": ["manufacturing", "production", "industrial", "automation"],
+    "media": ["media", "content", "publishing", "journalism", "broadcasting"],
+    "logistics": ["logistics", "supply chain", "transportation", "warehousing"]
+  },
+  "personality_traits": {
+    "analytical": ["analysis", "data", "research", "statistics", "metrics", "analyze"],
+    "creative": ["design", "creative", "innovative", "artistic", "visual", "ui/ux"],
+    "leadership": ["lead", "manage", "direct", "supervise", "mentor", "guide"],
+    "collaborative": ["team", "collaborate", "coordinate", "partner", "group"],
+    "detail_oriented": ["detail", "precise", "accurate", "quality", "testing"],
+    "innovative": ["innovation", "cutting-edge", "advanced", "breakthrough", "pioneer"],
+    "strategic": ["strategy", "planning", "roadmap", "vision", "long-term"],
+    "technical": ["technical", "engineering", "architecture", "system", "infrastructure"]
+  },
+  "achievement_keywords": [
+    "achieved", "improved", "increased", "reduced", "delivered", "implemented",
+    "optimized", "enhanced", "streamlined", "accelerated", "exceeded",
+    "launched", "built", "created", "developed", "designed", "established"
+  ],
+  "leadership_keywords": [
+    "led", "managed", "supervised", "coordinated", "directed", "mentored",
+    "guided", "oversaw", "facilitated", "spearheaded", "initiated"
+  ],
+  "education_levels": {
+    "high_school": ["high school", "secondary", "diploma"],
+    "bachelor": ["bachelor", "bsc", "ba", "bs", "bca", "btech", "beng"],
+    "master": ["master", "msc", "mba", "ms", "ma", "meng"],
+    "phd": ["phd", "doctorate", "doctoral", "dphil"]
+  },
+  "relevant_fields": [
+    "computer", "software", "data", "information", "engineering",
+    "mathematics", "statistics", "science", "technology", "programming",
+    "artificial intelligence", "machine learning", "cybersecurity"
+  ],
+  "weights": {
+    "skill_weight": 0.4,
+    "experience_weight": 0.4,
+    "education_weight": 0.2,
+    "diversity_bonus": 0.2,
+    "emerging_bonus": 0.2,
+    "technical_bonus": 0.1
+  },
+  "thresholds": {
+    "min_skills_diverse": 12,
+    "min_technical_skills": 4,
+    "min_achievement_density": 0.04,
+    "min_trajectory_score": 0.65,
+    "min_soft_skills": 3
+  }
+}
