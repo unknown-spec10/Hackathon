@@ -34,6 +34,7 @@
 
 ## 🚀 Quick Start
 
+### Local Development
 1. **Install Dependencies**
    ```bash
    pip install -r requirements.txt
@@ -59,6 +60,30 @@
    # Streamlit Frontend
    streamlit run streamlit_ui_clean.py --server.port 8501
    ```
+
+### 🌐 Streamlit Cloud Deployment
+
+**Ready for one-click deployment!**
+
+1. **Deploy to Streamlit Cloud**
+   - Push to GitHub
+   - Connect repository to [share.streamlit.io](https://share.streamlit.io)
+   - Set main file: `streamlit_ui_clean.py`
+
+2. **Add Secrets in Streamlit Cloud**
+   ```toml
+   GROQ_API_KEY = "gsk_your_actual_groq_api_key_here"
+   GROQ_API_URL = "https://api.groq.com/v1"
+   PROJECT_NAME = "AI Interview & Resume Analyzer"
+   SECRET_KEY = "your_secure_secret_key_for_production"
+   DATABASE_URL = "sqlite:///./hackathon.db"
+   ```
+
+3. **Access Your App**
+   - Live URL: `https://your-app-name.streamlit.app`
+   - Auto-deploys on GitHub push
+
+📖 **Full deployment guide**: See `STREAMLIT_CLOUD_DEPLOYMENT.md`
 
 ## 🔑 Key Features
 

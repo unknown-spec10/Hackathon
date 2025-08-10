@@ -21,6 +21,10 @@ logger = logging.getLogger(__name__)
 @dataclass
 class InterviewConfig:
     """Configuration for interview generation"""
+    domain: str = "python"
+    difficulty_level: str = "intermediate"
+    years_of_experience: int = 3
+    num_questions: int = 10
     max_questions: int = 20
     question_types: List[str] = None
     time_per_question: int = 3  # minutes
@@ -61,7 +65,7 @@ class QuestionGeneratorAgent:
             
         except Exception as e:
             logger.error(f"Question generation failed: {e}")
-            return self._get_fallback_questions(domain, difficulty)
+            raise Exception(f"Failed to generate questions: {str(e)}. Please check your API key and connection.")
     
     def _build_question_generation_prompt(
         self, 
@@ -143,8 +147,18 @@ Make sure each question has a comprehensive ideal_answer that can be used for co
                 if response.status == 200:
                     result = await response.json()
                     return result["choices"][0]["message"]["content"]
+                elif response.status == 401:
+                    error_text = await response.text()
+                    raise Exception(f"API authentication failed (401). Please check your Groq API key. Make sure it's valid and has sufficient credits. Error: {error_text}")
+                elif response.status == 429:
+                    error_text = await response.text()
+                    raise Exception(f"API rate limit exceeded (429). Please wait a moment and try again. Error: {error_text}")
+                elif response.status == 402:
+                    error_text = await response.text()
+                    raise Exception(f"API quota exceeded (402). Please check your Groq account credits. Error: {error_text}")
                 else:
-                    raise Exception(f"API call failed: {response.status}")
+                    error_text = await response.text()
+                    raise Exception(f"API call failed with status {response.status}. Error: {error_text}")
     
     def _parse_questions_response(self, response: str) -> List[Dict[str, Any]]:
         """Parse LLM response to extract questions with ideal answers"""
@@ -176,40 +190,6 @@ Make sure each question has a comprehensive ideal_answer that can be used for co
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse questions JSON: {e}")
             raise Exception("Invalid JSON response from LLM")
-    
-    def _get_fallback_questions(self, domain: InterviewDomain, difficulty: DifficultyLevel) -> List[Dict[str, Any]]:
-        """Fallback questions with ideal answers if API fails"""
-        fallback = {
-            InterviewDomain.PYTHON: [
-                {
-                    "id": 1,
-                    "question": "Explain the difference between list and tuple in Python",
-                    "type": "conceptual",
-                    "ideal_answer": "Lists are mutable, meaning you can modify them after creation. Tuples are immutable. Lists use square brackets [], tuples use parentheses (). Lists have methods like append(), remove(), etc. Tuples are faster for access and use less memory.",
-                    "key_points": ["mutability", "syntax", "performance", "methods"],
-                    "answer": ""
-                },
-                {
-                    "id": 2, 
-                    "question": "Write a function to find the factorial of a number",
-                    "type": "coding",
-                    "ideal_answer": "def factorial(n): if n <= 1: return 1; else: return n * factorial(n-1). Alternative iterative approach: def factorial(n): result = 1; for i in range(1, n+1): result *= i; return result. Should include error handling for negative numbers.",
-                    "key_points": ["recursion", "base_case", "iteration", "error_handling"],
-                    "answer": ""
-                }
-            ]
-        }
-        
-        return fallback.get(domain, [
-            {
-                "id": 1,
-                "question": f"Explain a key concept in {domain.value.replace('_', ' ')}",
-                "type": "conceptual",
-                "ideal_answer": f"This would depend on the specific concept in {domain.value.replace('_', ' ')}. Key principles and best practices should be mentioned.",
-                "key_points": ["fundamentals"],
-                "answer": ""
-            }
-        ])
 
 
 class AnswerEvaluationAgent:
@@ -298,7 +278,7 @@ Compare the user's answer with the ideal answer and provide a score.
             
         except Exception as e:
             logger.error(f"Answer evaluation failed: {e}")
-            return self._create_fallback_evaluation(question, user_answer)
+            raise Exception(f"Failed to evaluate answer: {str(e)}. Please check your API key and connection.")
     
     async def _call_groq_api(self, prompt: str) -> str:
         """Make API call to Groq for evaluation"""
@@ -322,8 +302,18 @@ Compare the user's answer with the ideal answer and provide a score.
                 if response.status == 200:
                     result = await response.json()
                     return result["choices"][0]["message"]["content"]
+                elif response.status == 401:
+                    error_text = await response.text()
+                    raise Exception(f"API authentication failed (401). Please check your Groq API key. Make sure it's valid and has sufficient credits. Error: {error_text}")
+                elif response.status == 429:
+                    error_text = await response.text()
+                    raise Exception(f"API rate limit exceeded (429). Please wait a moment and try again. Error: {error_text}")
+                elif response.status == 402:
+                    error_text = await response.text()
+                    raise Exception(f"API quota exceeded (402). Please check your Groq account credits. Error: {error_text}")
                 else:
-                    raise Exception(f"API call failed: {response.status}")
+                    error_text = await response.text()
+                    raise Exception(f"API call failed with status {response.status}. Error: {error_text}")
     
     def _parse_evaluation_response(self, response: str) -> Dict[str, Any]:
         """Parse evaluation response from LLM"""
@@ -367,45 +357,16 @@ Compare the user's answer with the ideal answer and provide a score.
             missing_points=question.get("key_points", [])
         )
     
-    def _create_fallback_evaluation(self, question: Dict[str, Any], user_answer: str) -> QuestionEvaluation:
-        """Create fallback evaluation if API fails"""
-        # Simple scoring based on answer length and basic keyword matching
-        ideal_answer = question.get("ideal_answer", "")
-        key_points = question.get("key_points", [])
-        
-        answer_lower = user_answer.lower()
-        ideal_lower = ideal_answer.lower()
-        
-        # Basic scoring algorithm
-        score = 0
-        
-        # Length factor (max 3 points)
-        if len(user_answer) > 50:
-            score += 3
-        elif len(user_answer) > 20:
-            score += 2
-        elif len(user_answer) > 10:
-            score += 1
-        
-        # Keyword matching (max 4 points)
-        if key_points:
-            matched_points = sum(1 for point in key_points if point.lower() in answer_lower)
-            score += (matched_points / len(key_points)) * 4
-        
-        # Content similarity (max 3 points)
-        common_words = set(ideal_lower.split()) & set(answer_lower.split())
-        if len(ideal_lower.split()) > 0:
-            similarity = len(common_words) / len(set(ideal_lower.split()))
-            score += similarity * 3
-        
+    def _create_empty_answer_evaluation(self, question: Dict[str, Any]) -> QuestionEvaluation:
+        """Create evaluation for empty/missing answers"""
         return QuestionEvaluation(
             question_id=question["id"],
             question=question["question"],
-            user_answer=user_answer,
-            score=min(score, 8.0),  # Cap fallback score at 8
-            feedback="Automatic evaluation. Consider the key concepts and compare with ideal answer.",
-            key_points_covered=[p for p in key_points if p.lower() in answer_lower],
-            missing_points=[p for p in key_points if p.lower() not in answer_lower]
+            user_answer="",
+            score=0.0,
+            feedback="No answer provided",
+            key_points_covered=[],
+            missing_points=question.get("key_points", [])
         )
 
 
@@ -478,7 +439,7 @@ class ScoringAgent:
             
         except Exception as e:
             logger.error(f"Recommendation generation failed: {e}")
-            return self._generate_fallback_recommendations(evaluations, overall_score)
+            raise Exception(f"Failed to generate recommendations: {str(e)}. Please check your API key and connection.")
     
     def _build_recommendation_prompt(
         self,
@@ -566,8 +527,18 @@ Provide constructive, actionable feedback that helps the candidate improve.
                 if response.status == 200:
                     result = await response.json()
                     return result["choices"][0]["message"]["content"]
+                elif response.status == 401:
+                    error_text = await response.text()
+                    raise Exception(f"API authentication failed (401). Please check your Groq API key. Make sure it's valid and has sufficient credits. Error: {error_text}")
+                elif response.status == 429:
+                    error_text = await response.text()
+                    raise Exception(f"API rate limit exceeded (429). Please wait a moment and try again. Error: {error_text}")
+                elif response.status == 402:
+                    error_text = await response.text()
+                    raise Exception(f"API quota exceeded (402). Please check your Groq account credits. Error: {error_text}")
                 else:
-                    raise Exception(f"API call failed: {response.status}")
+                    error_text = await response.text()
+                    raise Exception(f"API call failed with status {response.status}. Error: {error_text}")
     
     def _parse_recommendation_response(self, response: str) -> Dict[str, Any]:
         """Parse recommendation response from LLM"""
@@ -596,45 +567,15 @@ Provide constructive, actionable feedback that helps the candidate improve.
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse recommendations JSON: {e}")
             raise Exception("Invalid JSON response from recommendation LLM")
-    
-    def _generate_fallback_recommendations(
-        self, 
-        evaluations: List[QuestionEvaluation], 
-        overall_score: float
-    ) -> Dict[str, Any]:
-        """Generate basic recommendations if API fails"""
-        
-        avg_score = overall_score / 10  # Convert to 0-10 scale
-        
-        if avg_score >= 8:
-            strengths = ["Strong technical knowledge", "Good problem-solving skills"]
-            weaknesses = ["Minor areas for optimization"]
-            recommendations = ["Continue practicing advanced concepts"]
-        elif avg_score >= 6:
-            strengths = ["Good foundation", "Shows potential"]
-            weaknesses = ["Some knowledge gaps", "Need more practice"]
-            recommendations = ["Focus on weak areas", "Practice more problems"]
-        else:
-            strengths = ["Shows willingness to learn"]
-            weaknesses = ["Significant knowledge gaps", "Need fundamental strengthening"]
-            recommendations = ["Study fundamentals", "Take structured courses"]
-        
-        return {
-            "strengths": strengths,
-            "weaknesses": weaknesses,
-            "recommendations": recommendations,
-            "suggested_resources": [],
-            "next_level_readiness": avg_score >= 7,
-            "readiness_explanation": f"Score of {overall_score}% indicates readiness" if avg_score >= 7 else "More preparation needed",
-            "focus_areas": ["Technical skills", "Problem solving"],
-            "estimated_study_time": "2-4 weeks" if avg_score >= 6 else "1-3 months"
-        }
 
 
 class InterviewOrchestrator:
     """Main orchestrator that coordinates all interview agents"""
     
-    def __init__(self, groq_api_key: str):
+    def __init__(self, groq_api_key: str = None):
+        if not groq_api_key:
+            raise ValueError("Groq API key is required for interview system. Please provide a valid API key.")
+        
         self.question_generator = QuestionGeneratorAgent(groq_api_key)
         self.answer_evaluator = AnswerEvaluationAgent(groq_api_key)
         self.scoring_agent = ScoringAgent(groq_api_key)

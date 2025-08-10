@@ -1,0 +1,114 @@
+{
+  "api_base_url": "http://localhost:8000",
+  "authentication": {
+    "type": "Bearer Token",
+    "header": "Authorization: Bearer {token}",
+    "test_token": "demo_token"
+  },
+  "endpoints": {
+    "interview": {
+      "get_domains": {
+        "method": "GET",
+        "url": "/interview/domains",
+        "auth_required": false,
+        "description": "Get available domains and difficulty levels"
+      },
+      "start_interview": {
+        "method": "POST",
+        "url": "/interview/start",
+        "auth_required": true,
+        "description": "Start new interview session",
+        "request_body": {
+          "domain": "string (python|javascript|data_science|etc)",
+          "years_of_experience": "integer"
+        }
+      },
+      "submit_answers": {
+        "method": "POST", 
+        "url": "/interview/submit",
+        "auth_required": true,
+        "description": "Submit answers for AI evaluation",
+        "request_body": {
+          "session_id": "integer",
+          "answers": [
+            {
+              "question_id": "integer",
+              "answer": "string"
+            }
+          ]
+        }
+      },
+      "get_results": {
+        "method": "GET",
+        "url": "/interview/session/{session_id}",
+        "auth_required": true,
+        "description": "Get interview results"
+      },
+      "get_history": {
+        "method": "GET",
+        "url": "/interview/history", 
+        "auth_required": true,
+        "description": "Get user interview history"
+      },
+      "submit_feedback": {
+        "method": "POST",
+        "url": "/interview/feedback/{session_id}",
+        "auth_required": true,
+        "description": "Submit interview feedback"
+      }
+    },
+    "auth": {
+      "login": {
+        "method": "POST",
+        "url": "/auth/login",
+        "auth_required": false
+      },
+      "register": {
+        "method": "POST", 
+        "url": "/auth/register",
+        "auth_required": false
+      }
+    },
+    "other": {
+      "api_docs": {
+        "method": "GET",
+        "url": "/docs",
+        "description": "Interactive API documentation"
+      },
+      "resume_upload": {
+        "method": "POST",
+        "url": "/resume/upload",
+        "auth_required": true
+      },
+      "job_recommendations": {
+        "method": "GET",
+        "url": "/jobs/recommendations",
+        "auth_required": true
+      },
+      "course_recommendations": {
+        "method": "GET", 
+        "url": "/courses/recommendations",
+        "auth_required": true
+      }
+    }
+  },
+  "interview_domains": [
+    "python",
+    "javascript", 
+    "java",
+    "data_science",
+    "machine_learning",
+    "cloud_computing",
+    "devops",
+    "web_development",
+    "cybersecurity",
+    "blockchain"
+  ],
+  "difficulty_levels": [
+    "fresher (0-1 years)",
+    "junior (1-3 years)", 
+    "intermediate (3-5 years)",
+    "senior (5-8 years)",
+    "expert (8+ years)"
+  ]
+}

@@ -1,20 +1,18 @@
-# Core API Dependencies
+# Core API Dependencies (Streamlit Cloud Compatible)
 fastapi==0.104.1
 uvicorn[standard]==0.22.0
 SQLAlchemy==2.0.30
 pydantic==2.11.7
 pydantic-settings==2.0.0
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-bcrypt==4.0.1
 python-multipart==0.0.9
 python-dotenv==1.0.1
 
-# Database
-psycopg2-binary==2.9.9
-
 # UI Framework
 streamlit==1.44.1
+
+# Data Visualization for Professional UI
+plotly==5.17.0
+pandas==2.2.3
 
 # HTTP Client
 requests==2.31.0
@@ -27,12 +25,8 @@ langchain-groq==0.3.2
 groq==0.24.0
 
 # Data Processing
-pandas==2.2.3
 numpy==2.2.6
 scikit-learn==1.6.1
 
 # PDF Processing
 pdfplumber==0.11.6
-
-# Development and Testing
-pytest==8.2.1

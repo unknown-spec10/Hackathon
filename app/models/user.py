@@ -29,4 +29,4 @@ class User(Base):
     
     # Relationships
     resumes = relationship("Resume", back_populates="user")
-    interview_sessions = relationship("InterviewSession", back_populates="user")
+    interview_sessions = relationship("InterviewSession", back_populates="user", lazy="dynamic")

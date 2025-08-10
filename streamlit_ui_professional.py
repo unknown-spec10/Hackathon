@@ -85,21 +85,6 @@ st.markdown("""
         border: 1px solid #e8ecef;
         margin: 1rem 0;
         transition: all 0.3s ease;
-        color: var(--dark-text);
-    }
-    
-    .feature-card h4 {
-        color: var(--primary-color);
-        font-weight: 600;
-        margin-bottom: 1rem;
-        font-size: 1.3rem;
-    }
-    
-    .feature-card p {
-        color: #555;
-        line-height: 1.6;
-        margin-bottom: 1rem;
-        font-size: 1rem;
     }
     
     .feature-card:hover {
@@ -713,7 +698,8 @@ def main():
     
     with footer_col3:
         st.markdown("**📞 Contact**")
-        st.markdown("• HackElites")
+        st.markdown("• support@aianalyzer.com")
+        st.markdown("• +1 (555) 123-4567")
 
 def safe_run():
     """Run application with error handling"""
