@@ -1,221 +1,119 @@
-# 🚀 Job & Course Platform with AI Resume Processing
+# Hackathon API - AI-Powered Resume Processing Platform
 
-A comprehensive FastAPI-based platform for job and course management with intelligent B2C resume processing using LangGraph and AI recommendations.
+## 🏗️ Architecture Overview
 
-## 📋 Features
+**Core Workflow**: Resume Upload → PDF Processing → AI Parsing → Career Insights → Job/Course Recommendations
 
-- **Role-Based Authentication**: Separate B2B (companies/institutions) and B2C (individuals) user flows
-- **AI Resume Processing**: LangGraph + Groq AI-powered resume parsing and analysis
-- **Intelligent Recommendations**: AI-powered job and course recommendations based on resume analysis
-- **B2B Features**: Companies can post jobs, institutions can create courses
-- **B2C Features**: Individuals can upload resumes, get recommendations, apply for jobs/courses
-- **Modern UI**: Streamlit-based comprehensive testing interface
-
-## 🏗️ Architecture
-
-- **Framework**: FastAPI with SQLAlchemy ORM
-- **Database**: SQLite for development
-- **Authentication**: JWT with bcrypt + Role-based access (B2B/B2C)
-- **AI Engine**: LangGraph workflows with Groq LLM (mixtral-8x7b-32768)
-- **PDF Processing**: PDFPlumber for resume text extraction
-- **UI**: Streamlit comprehensive testing interface
-- **Documentation**: Auto-generated OpenAPI/Swagger docs
-
-## 🚀 Quick Start
-
-### 1. Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 2. Set Up Environment
-
-Create a `.env` file with your Groq API key:
-
-```env
-GROQ_API_KEY=your_groq_api_key_here
-SECRET_KEY=your-secret-key-here
-```
-
-### 3. Initialize Database
-
-```bash
-python create_tables.py
-```
-
-### 4. Start the Application
-
-**Option 1: Streamlit UI (Recommended for Testing)**
-```bash
-streamlit run app_ui.py
-```
-Access at: http://localhost:8501
-
-**Option 2: FastAPI Server**
-```bash
-python start_server.py
-```
-Access at: http://localhost:8000
-
-## 🎯 User Flows
-
-### B2B Users (Companies & Institutions)
-1. **Register as B2B** → Access company/institution features
-2. **Post Jobs** (Companies) → Create job listings with requirements
-3. **Create Courses** (Institutions) → Setup educational programs
-4. **View Analytics** → Track job/course performance
-
-### B2C Users (Individuals)
-1. **Register as B2C** → Access individual features
-2. **Upload Resume** → AI-powered parsing with LangGraph + Groq
-3. **Get Recommendations** → AI suggests matching jobs and courses
-4. **Apply & Enroll** → Submit applications and course enrollments
-
-## 🤖 AI Resume Processing
-
-### LangGraph Workflow
-- **State Management**: Tracks parsing progress and data
-- **Multi-Step Processing**: Extract → Analyze → Structure → Validate
-- **Error Handling**: Robust error recovery and retry logic
-- **Confidence Scoring**: AI confidence in parsing accuracy
-
-### Groq AI Integration
-- **Model**: mixtral-8x7b-32768 (fast inference)
-- **Features**: Text extraction, skill identification, experience analysis
-- **Output**: Structured resume data with confidence scores
+- **Backend**: FastAPI with SQLAlchemy ORM
+- **AI Engine**: LangGraph + Groq (llama3-70b-8192) for resume parsing
+- **NLP Analysis**: Dynamic keyword generation with career insights
+- **Frontend**: Streamlit for testing and demonstration
+- **Database**: SQLite (development) / PostgreSQL (production)
 
 ## 📁 Project Structure
 
 ```
-├── app/
-│   ├── core/                    # Settings and configuration
-│   ├── models/                  # SQLAlchemy models (User, Job, Course, Resume)
-│   ├── repositories/            # Data access layer
-│   ├── schemas/                 # Pydantic schemas
-│   ├── services/               # Business logic
-│   │   ├── langgraph_resume_parser.py  # AI resume parsing
-│   │   ├── job_recommender.py          # Job recommendation engine
-│   │   ├── course_recommender.py       # Course recommendation engine
-│   │   └── pdf_processor.py            # PDF text extraction
-│   ├── uploads/resumes/        # Resume file storage
-│   └── utils/                  # Authentication utilities
-├── database/                   # Database setup and seeding
-├── app_ui.py                  # Main Streamlit UI application
-├── main.py                    # FastAPI application
-├── start_server.py           # API server startup
-├── create_tables.py          # Database initialization
-└── clear_database.py         # Database cleanup utility
+├── app/                          # Core application
+│   ├── models/                   # Database models (User, Resume, Job, Course)
+│   ├── routes/                   # API endpoints
+│   ├── services/                 # Business logic
+│   │   ├── langgraph_resume_parser.py    # AI-powered resume parsing
+│   │   ├── nlp_insights.py              # Career insights & analysis
+│   │   ├── pdf_processor.py             # PDF text extraction
+│   │   ├── job_recommender.py           # Job matching engine
+│   │   └── course_recommender.py        # Course recommendations
+│   ├── schemas/                  # Pydantic models for API
+│   └── utils/                    # Authentication & utilities
+├── database/                     # Database setup and utilities
+├── tests/                        # Test suites
+├── config/                       # Configuration files
+├── streamlit_ui_clean.py         # Main UI application
+├── main.py                       # FastAPI application entry point
+└── requirements.txt              # Dependencies with specific versions
 ```
 
-## 🔧 API Endpoints
+## 🚀 Quick Start
 
-### Authentication
-- `POST /auth/register` - User registration (B2B/B2C)
-- `POST /auth/login` - User login
-- `GET /auth/me` - Get current user profile
+1. **Install Dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-### B2B Endpoints
-- `POST /jobs/` - Create job posting (companies)
-- `POST /courses/` - Create course (institutions)
-- `GET /jobs/company/{company_id}` - Get company jobs
-- `GET /courses/institution/{institution_id}` - Get institution courses
+2. **Setup Environment**
+   ```bash
+   cp .env.example .env
+   # Add your GROQ_API_KEY
+   ```
 
-### B2C Endpoints
-- `POST /resumes/upload` - Upload and process resume
-- `GET /resumes/recommendations` - Get AI recommendations
-- `POST /jobs/{job_id}/apply` - Apply for job
-- `POST /courses/{course_id}/enroll` - Enroll in course
+3. **Initialize Database**
+   ```bash
+   python database/db_setup.py
+   python database/seed.py
+   ```
 
-### General
-- `GET /jobs/` - List all jobs
-- `GET /courses/` - List all courses
-- `GET /stats/` - Platform analytics
+4. **Run Applications**
+   ```bash
+   # FastAPI Backend
+   uvicorn main:app --reload --port 8000
+   
+   # Streamlit Frontend
+   streamlit run streamlit_ui_clean.py --server.port 8501
+   ```
 
-## 🎮 Testing with Streamlit UI
+## 🔑 Key Features
 
-The comprehensive Streamlit UI provides:
+### AI Resume Processing
+- **LangGraph Workflow**: Multi-stage parsing pipeline
+- **Groq Integration**: Fast AI inference with llama3-70b-8192
+- **Dynamic Keyword Generation**: AI-powered skill extraction
+- **Career Insights**: Personality traits, trajectory analysis, recommendations
 
-1. **Authentication Testing**
-   - B2B/B2C registration and login flows
-   - Role-based feature access
+### Intelligent Matching
+- **Job Recommendations**: Skill-based matching with gap analysis
+- **Course Suggestions**: Learning path recommendations
+- **Score Calculation**: Confidence-based ranking system
 
-2. **B2B Testing**
-   - Job posting (companies)
-   - Course creation (institutions)
-   - Analytics dashboard
+### User Management
+- **Multi-role System**: Job Seekers, Employers, Course Providers
+- **Organization Support**: Company-based user management
+- **Authentication**: JWT-based secure access
 
-3. **B2C Testing**
-   - Resume upload and AI processing
-   - AI-powered recommendations
-   - Application and enrollment
+## 🧪 Testing
 
-4. **Admin Features**
-   - User management
-   - System statistics
-   - Database operations
-
-## 🔍 AI Recommendation System
-
-### Job Recommendations
-- **Skill Matching**: Compare resume skills with job requirements
-- **Experience Level**: Match career level with job seniority
-- **Industry Alignment**: Consider industry preferences and experience
-- **Location Preference**: Factor in location and remote options
-
-### Course Recommendations
-- **Skill Gap Analysis**: Identify missing skills for career growth
-- **Career Path**: Suggest courses for desired career progression
-- **Industry Trends**: Recommend trending skills in user's field
-- **Learning Level**: Match course difficulty with user experience
-
-## 🔒 Security & Authentication
-
-- **Role-Based Access**: Separate B2B and B2C feature access
-- **JWT Tokens**: Secure token-based authentication
-- **Password Hashing**: bcrypt with salt
-- **File Upload Security**: Safe resume file handling
-- **API Rate Limiting**: Prevent abuse
-
-## 🚀 Getting Started Examples
-
-### B2C User Journey
-```python
-# 1. Register as B2C user
-# 2. Upload resume (PDF)
-# 3. AI processes resume with LangGraph + Groq
-# 4. Get personalized job/course recommendations
-# 5. Apply for jobs or enroll in courses
+```bash
+# Run specific test suites
+python -m pytest tests/test_nlp_insights.py
+python -m pytest tests/test_ai_dynamic_keywords.py
+python -m pytest tests/test_complete_workflow_insights.py
 ```
 
-### B2B User Journey
-```python
-# 1. Register as company/institution
-# 2. Create job postings or courses
-# 3. View applications and enrollments
-# 4. Access analytics and insights
-```
+## 📊 API Endpoints
 
-## 🎯 Success Metrics
+- `POST /auth/register` - User registration
+- `POST /auth/login` - User authentication
+- `POST /resume/upload` - Resume upload and processing
+- `GET /resume/{id}/jobs` - Job recommendations
+- `GET /resume/{id}/courses` - Course recommendations
+- `GET /stats/overview` - System statistics
 
-✅ **AI Resume Processing**: LangGraph + Groq integration  
-✅ **Role-Based Authentication**: B2B/B2C separation  
-✅ **Intelligent Recommendations**: AI-powered matching  
-✅ **Comprehensive UI**: Full-featured Streamlit interface  
-✅ **File Processing**: PDF resume handling  
-✅ **Database Integration**: Complete data persistence  
-✅ **Error Handling**: Robust error management  
+## 🎯 Recent Improvements
 
-## 🔮 Future Enhancements
+- ✅ Dynamic AI keyword generation
+- ✅ Enhanced career trajectory analysis
+- ✅ Improved serialization handling
+- ✅ Streamlined codebase organization
+- ✅ Updated dependencies with specific versions
 
-- **Real-time Notifications**: Job/course alerts
-- **Advanced Analytics**: ML-powered insights
-- **Video Resume Support**: Extended media processing
-- **Integration APIs**: Third-party platform connections
-- **Mobile App**: React Native application
+## 🔧 Configuration
 
----
+Key environment variables:
+- `GROQ_API_KEY`: Groq API key for AI processing
+- `DATABASE_URL`: Database connection string
+- `JWT_SECRET_KEY`: JWT token signing key
 
-**Start Testing**: `streamlit run app_ui.py` → http://localhost:8501
+## 📈 Performance
 
-Happy coding! 🚀
+- **Resume Processing**: ~2-3 seconds per resume
+- **AI Analysis**: 7-day TTL caching for keywords
+- **Database**: Optimized queries with proper indexing
+- **API Response**: <200ms for standard operations

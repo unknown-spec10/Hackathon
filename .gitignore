@@ -37,6 +37,7 @@ dist/
 .coverage.*
 htmlcov/
 .cache/
+tests/
 
 # MyPy / Type checking
 .mypy_cache/

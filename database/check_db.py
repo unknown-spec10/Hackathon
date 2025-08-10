@@ -1,3 +1,9 @@
+import sys
+import os
+
+# Add parent directory to path so we can import from app
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from database.db_setup import get_db
 from app.models.job import Job
 from datetime import date

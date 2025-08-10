@@ -105,8 +105,9 @@ class JobRecommender:
             'summary': ''
         }
         
-        # Extract skills
-        profile['skills'] = parsed_resume.get('skills', [])
+        # Extract skills (ensure they are strings and not None)
+        skills = parsed_resume.get('skills', [])
+        profile['skills'] = [str(skill) for skill in skills if skill is not None] if skills else []
         
         # Extract experience data
         experience = parsed_resume.get('experience', [])
@@ -124,11 +125,11 @@ class JobRecommender:
                         years_exp.append(end_year - start_year)
                         
                     # Extract job titles and descriptions
-                    if exp.get('title'):
-                        profile['job_titles'].append(exp['title'].lower())
+                    if exp.get('title') is not None:
+                        profile['job_titles'].append(str(exp['title']).lower())
                     
-                    if exp.get('description'):
-                        profile['experience_descriptions'].append(exp['description'])
+                    if exp.get('description') is not None:
+                        profile['experience_descriptions'].append(str(exp['description']))
                         
                 except:
                     continue
@@ -138,7 +139,11 @@ class JobRecommender:
         # Extract education level
         education = parsed_resume.get('education', [])
         if education:
-            degrees = [edu.get('degree', '').lower() for edu in education if edu.get('degree')]
+            degrees = [
+                str(edu.get('degree', '')).lower() 
+                for edu in education 
+                if edu and edu.get('degree') is not None
+            ]
             if any('phd' in deg or 'doctorate' in deg for deg in degrees):
                 profile['education_level'] = 'doctorate'
             elif any('master' in deg or 'mba' in deg or 'ms' in deg or 'ma' in deg for deg in degrees):
@@ -150,7 +155,13 @@ class JobRecommender:
         
         # Extract certifications
         certifications = parsed_resume.get('certifications', [])
-        profile['certifications'] = [cert.get('name', '') for cert in certifications if cert.get('name')]
+        if certifications:
+            profile['certifications'] = [
+                str(cert.get('name', '')) for cert in certifications 
+                if cert and cert.get('name') is not None
+            ]
+        else:
+            profile['certifications'] = []
         
         # Extract summary
         profile['summary'] = parsed_resume.get('summary', '')
@@ -217,7 +228,7 @@ class JobRecommender:
             # Text similarity (job description vs candidate experience)
             text_score = self._calculate_text_similarity(
                 candidate_profile['experience_descriptions'] + [candidate_profile['summary']],
-                [job.responsibilities or "", ""]  # Use responsibilities instead of description/requirements
+                [job.responsibilities or "", job.title or ""]  # Handle None values properly
             )
             
             # Calculate weighted overall score
@@ -251,9 +262,20 @@ class JobRecommender:
             'technologies': []
         }
         
-        # Extract skills from job responsibilities and skills_required
+        # Extract skills from job responsibilities and skills_required (handle None values)
         responsibilities_text = job.responsibilities or ''
-        skills_text = ' '.join(job.skills_required) if job.skills_required else ''
+        
+        # Handle skills_required which can be None, list, or other types
+        if job.skills_required:
+            if isinstance(job.skills_required, list):
+                # Filter out None values from the list
+                skills_list = [str(skill) for skill in job.skills_required if skill is not None]
+                skills_text = ' '.join(skills_list)
+            else:
+                skills_text = str(job.skills_required)
+        else:
+            skills_text = ''
+            
         job_text = f"{responsibilities_text} {skills_text}".lower()
         
         # Common skill patterns
@@ -402,8 +424,9 @@ class JobRecommender:
     ) -> float:
         """Calculate text similarity using TF-IDF and cosine similarity"""
         try:
-            candidate_text = ' '.join([text for text in candidate_texts if text])
-            job_text = ' '.join([text for text in job_texts if text])
+            # Filter out None values and convert to strings
+            candidate_text = ' '.join([str(text) for text in candidate_texts if text is not None and str(text).strip()])
+            job_text = ' '.join([str(text) for text in job_texts if text is not None and str(text).strip()])
             
             if not candidate_text or not job_text:
                 return 0.0
@@ -417,7 +440,8 @@ class JobRecommender:
             
             return similarity
             
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in text similarity calculation: {e}")
             return 0.0
     
     def _generate_recommendation_reason(

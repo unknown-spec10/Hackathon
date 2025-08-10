@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Streamlit UI for testing the Hackathon API with Resume Processing
+Hackathon API Streamlit Interface
+Main application for AI-powered resume processing and career recommendations.
 """
 import streamlit as st
 import json
@@ -9,7 +10,7 @@ import atexit
 import tempfile
 from datetime import datetime, date
 
-# Set page config
+# Page configuration
 st.set_page_config(
     page_title="Hackathon API Tester",
     page_icon="🚀",
@@ -17,11 +18,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Set up environment
+# Environment setup
 os.environ["DATABASE_URL"] = "sqlite:///./hackathon.db"
 
 def cleanup_database():
-    """Clean up the database file when the session ends"""
+    """Clean up database on session end"""
     try:
         db_file = "hackathon.db"
         if os.path.exists(db_file):
@@ -148,6 +149,41 @@ def main():
                 # Existing User Login
                 st.markdown("---")
                 st.subheader("🔐 Already have an account?")
+                
+                # Sample Credentials for Testing
+                with st.expander("🧪 Sample Test Credentials", expanded=True):
+                    st.markdown("**For easy testing, use these sample accounts:**")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown("""
+                        **🏢 B2B Company User:**
+                        - Email: `company@test.com`
+                        - Password: `password123`
+                        - Permissions: Can create jobs
+                        """)
+                        
+                        st.markdown("""
+                        **🎓 B2B Institution User:**
+                        - Email: `institution@test.com`
+                        - Password: `password123`
+                        - Permissions: Can create courses
+                        """)
+                    
+                    with col2:
+                        st.markdown("""
+                        **👤 B2C Individual User:**
+                        - Email: `user@test.com`
+                        - Password: `password123`
+                        - Permissions: Browse only (no create)
+                        """)
+                        
+                        st.markdown("""
+                        **🔧 Admin User:**
+                        - Email: `admin@test.com`
+                        - Password: `password123`
+                        - Permissions: Full access
+                        """)
                 
                 col1, col2 = st.columns(2)
                 with col1:
@@ -549,7 +585,7 @@ def main():
                     # Import resume processing services
                     try:
                         from app.services.langgraph_resume_parser import LangGraphResumeParser, ParsedResumeData
-                        from app.services.pdf_processor import PDFProcessor
+                        from app.services.enhanced_pdf_processor import EnhancedPDFProcessor
                         from app.services.job_recommender import JobRecommender
                         from app.services.course_recommender import CourseRecommender
                         
@@ -561,7 +597,7 @@ def main():
                         
                         # Initialize services
                         resume_parser = LangGraphResumeParser(groq_api_key=groq_api_key)
-                        pdf_processor = PDFProcessor()
+                        pdf_processor = EnhancedPDFProcessor()
                         job_recommender = JobRecommender()
                         course_recommender = CourseRecommender()
                         
@@ -603,13 +639,13 @@ def main():
                                         
                                         start_time = datetime.now()
                                         
-                                        # Step 1: Extract text from PDF
+                                        # Step 1: Extract data with enhanced pipeline
                                         progress = st.progress(0)
-                                        st.info("📄 Step 1: Extracting text from PDF...")
+                                        st.info("📄 Step 1: Extracting PDF data (Text + Tables + Images + OCR)...")
                                         progress.progress(25)
                                         
-                                        pdf_data = pdf_processor.extract_complete_pdf_data(tmp_file_path)
-                                        extracted_text = pdf_data.get("text", "")
+                                        pdf_data = pdf_processor.extract_complete_resume_data(tmp_file_path)
+                                        extracted_text = pdf_data.get("combined_text", pdf_data.get("text", ""))
                                         
                                         if not extracted_text.strip():
                                             st.error("❌ Could not extract text from PDF. Please ensure the PDF contains readable text.")
@@ -626,7 +662,8 @@ def main():
                                         
                                         # Step 2: Parse resume with LangGraph
                                         st.info("🤖 Step 2: Analyzing resume with AI (LangGraph + Groq)...")
-                                        parsed_data = resume_parser.parse_resume(extracted_text)
+                                        # Pass both text and table data to the parser
+                                        parsed_data = resume_parser.parse_resume(extracted_text, pdf_data.get("tables", []))
                                         progress.progress(75)
                                         
                                         processing_time = (datetime.now() - start_time).total_seconds()
@@ -640,7 +677,7 @@ def main():
                                             file_size=uploaded_file.size,
                                             parsed_data=parsed_data.model_dump(),  # Convert Pydantic model to dict
                                             processing_time=processing_time,
-                                            confidence_score=0.95,
+                                            confidence_score="0.95",
                                             parsing_errors=None
                                         )
                                         
@@ -652,47 +689,309 @@ def main():
                                         st.success("✅ Resume processed and saved successfully!")
                                         st.balloons()
                                         
-                                        # Display parsed data
-                                        st.subheader("📋 AI-Extracted Resume Data")
+                                        # Display parsed data with improved UI
+                                        st.markdown("---")
+                                        st.markdown("## 📊 Resume Analysis Results")
                                         parsed_data_dict = parsed_data.model_dump()
                                         
-                                        # Show key information in a nice format
-                                        col1, col2 = st.columns(2)
+                                        # Show summary metrics
+                                        col1, col2, col3, col4 = st.columns(4)
                                         with col1:
-                                            if parsed_data_dict.get('personal_info'):
-                                                st.markdown("**👤 Personal Info:**")
-                                                personal = parsed_data_dict['personal_info']
-                                                if personal.get('name'):
-                                                    st.write(f"**Name:** {personal['name']}")
-                                                if personal.get('email'):
-                                                    st.write(f"**Email:** {personal['email']}")
-                                                if personal.get('phone'):
-                                                    st.write(f"**Phone:** {personal['phone']}")
-                                                if personal.get('location'):
-                                                    st.write(f"**Location:** {personal['location']}")
-                                            
-                                            if parsed_data_dict.get('skills'):
-                                                st.markdown("**🛠️ Skills:**")
-                                                for skill in parsed_data_dict['skills'][:10]:  # Show first 10
-                                                    st.write(f"• {skill}")
-                                        
+                                            skills_count = len(parsed_data_dict.get('skills', []))
+                                            st.metric("🛠️ Skills Found", skills_count)
                                         with col2:
-                                            if parsed_data_dict.get('experience'):
-                                                st.markdown("**💼 Experience:**")
-                                                for exp in parsed_data_dict['experience'][:3]:  # Show first 3
-                                                    st.write(f"**{exp.get('title', 'N/A')}** at {exp.get('company', 'N/A')}")
-                                                    if exp.get('start_date') or exp.get('end_date'):
-                                                        st.write(f"*{exp.get('start_date', '')} - {exp.get('end_date', '')}*")
-                                            
-                                            if parsed_data_dict.get('education'):
-                                                st.markdown("**🎓 Education:**")
-                                                for edu in parsed_data_dict['education'][:3]:  # Show first 3
-                                                    st.write(f"**{edu.get('degree', 'N/A')}** in {edu.get('field', 'N/A')}")
-                                                    if edu.get('institution'):
-                                                        st.write(f"*{edu.get('institution')}*")
+                                            exp_count = len(parsed_data_dict.get('experience', []))
+                                            st.metric("💼 Work Experience", exp_count)
+                                        with col3:
+                                            edu_count = len(parsed_data_dict.get('education', []))
+                                            st.metric("🎓 Education Records", edu_count)
+                                        with col4:
+                                            has_contact = bool(parsed_data_dict.get('personal_info', {}).get('email'))
+                                            st.metric("📧 Contact Info", "✅" if has_contact else "❌")
                                         
-                                        # Show full JSON data in expander
-                                        with st.expander("🔍 View Complete AI Analysis"):
+                                        st.markdown("---")
+                                        
+                                        # Create tabs for better organization
+                                        tab1, tab2, tab3, tab4, tab5 = st.tabs(["👤 Personal Info", "🛠️ Skills & Experience", "🎓 Education", "🧠 AI Insights", "📋 Complete Data"])
+                                        
+                                        with tab1:
+                                            st.markdown("### Personal Information")
+                                            if parsed_data_dict.get('personal_info'):
+                                                personal = parsed_data_dict['personal_info']
+                                                
+                                                # Create info cards
+                                                cols = st.columns(2)
+                                                with cols[0]:
+                                                    if personal.get('name'):
+                                                        st.markdown(f"""
+                                                        <div style="background-color: #f0f2f6; padding: 10px; border-radius: 10px; margin: 5px 0;">
+                                                            <h4 style="margin: 0; color: #1f77b4;">👤 Full Name</h4>
+                                                            <p style="margin: 5px 0; font-size: 16px;">{personal['name']}</p>
+                                                        </div>
+                                                        """, unsafe_allow_html=True)
+                                                    
+                                                    if personal.get('phone'):
+                                                        st.markdown(f"""
+                                                        <div style="background-color: #f0f2f6; padding: 10px; border-radius: 10px; margin: 5px 0;">
+                                                            <h4 style="margin: 0; color: #1f77b4;">📱 Phone</h4>
+                                                            <p style="margin: 5px 0; font-size: 16px;">{personal['phone']}</p>
+                                                        </div>
+                                                        """, unsafe_allow_html=True)
+                                                
+                                                with cols[1]:
+                                                    if personal.get('email'):
+                                                        st.markdown(f"""
+                                                        <div style="background-color: #f0f2f6; padding: 10px; border-radius: 10px; margin: 5px 0;">
+                                                            <h4 style="margin: 0; color: #1f77b4;">📧 Email</h4>
+                                                            <p style="margin: 5px 0; font-size: 16px;">{personal['email']}</p>
+                                                        </div>
+                                                        """, unsafe_allow_html=True)
+                                                    
+                                                    if personal.get('location'):
+                                                        st.markdown(f"""
+                                                        <div style="background-color: #f0f2f6; padding: 10px; border-radius: 10px; margin: 5px 0;">
+                                                            <h4 style="margin: 0; color: #1f77b4;">📍 Location</h4>
+                                                            <p style="margin: 5px 0; font-size: 16px;">{personal['location']}</p>
+                                                        </div>
+                                                        """, unsafe_allow_html=True)
+                                            else:
+                                                st.info("No personal information extracted")
+                                        
+                                        with tab2:
+                                            col1, col2 = st.columns(2)
+                                            
+                                            with col1:
+                                                st.markdown("### 🛠️ Technical Skills")
+                                                if parsed_data_dict.get('skills'):
+                                                    skills_text = ', '.join(parsed_data_dict['skills'][:10])  # Show first 10 skills
+                                                    st.markdown(f"""
+                                                    <div style="background-color: #e8f5e8; padding: 15px; border-radius: 10px; border-left: 4px solid #28a745;">
+                                                        <p style="margin: 0; font-size: 14px; line-height: 1.6;">{skills_text}</p>
+                                                    </div>
+                                                    """, unsafe_allow_html=True)
+                                                    
+                                                    if len(parsed_data_dict['skills']) > 10:
+                                                        with st.expander(f"View all {len(parsed_data_dict['skills'])} skills"):
+                                                            remaining_skills = ', '.join(parsed_data_dict['skills'][10:])
+                                                            st.write(remaining_skills)
+                                                else:
+                                                    st.info("No skills extracted")
+                                            
+                                            with col2:
+                                                st.markdown("### 💼 Work Experience")
+                                                if parsed_data_dict.get('experience'):
+                                                    for i, exp in enumerate(parsed_data_dict['experience'][:3]):  # Show first 3
+                                                        st.markdown(f"""
+                                                        <div style="background-color: #fff3cd; padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #ffc107;">
+                                                            <h5 style="margin: 0; color: #856404;">{exp.get('title', exp.get('job_title', 'N/A'))}</h5>
+                                                            <p style="margin: 5px 0; font-weight: bold; color: #856404;">{exp.get('company', 'N/A')}</p>
+                                                            <p style="margin: 5px 0; font-size: 12px; color: #6c757d;">{exp.get('start_date', '')} - {exp.get('end_date', '')}</p>
+                                                        </div>
+                                                        """, unsafe_allow_html=True)
+                                                    
+                                                    if len(parsed_data_dict['experience']) > 3:
+                                                        with st.expander(f"View all {len(parsed_data_dict['experience'])} experiences"):
+                                                            for exp in parsed_data_dict['experience'][3:]:
+                                                                st.write(f"**{exp.get('title', exp.get('job_title', 'N/A'))}** at {exp.get('company', 'N/A')}")
+                                                                st.write(f"*{exp.get('start_date', '')} - {exp.get('end_date', '')}*")
+                                                                st.write("---")
+                                                else:
+                                                    st.info("No work experience extracted")
+                                        
+                                        with tab3:
+                                            st.markdown("### 🎓 Educational Background")
+                                            if parsed_data_dict.get('education'):
+                                                for edu in parsed_data_dict['education']:
+                                                    st.markdown(f"""
+                                                    <div style="background-color: #d4edda; padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #28a745;">
+                                                        <h5 style="margin: 0; color: #155724;">{edu.get('degree', 'N/A')} in {edu.get('field', 'N/A')}</h5>
+                                                        <p style="margin: 5px 0; font-weight: bold; color: #155724;">{edu.get('institution', 'N/A')}</p>
+                                                        <p style="margin: 5px 0; font-size: 12px; color: #6c757d;">{edu.get('graduation_date', '')}</p>
+                                                    </div>
+                                                    """, unsafe_allow_html=True)
+                                            else:
+                                                st.info("No education information extracted")
+                                        
+                                        with tab4:
+                                            st.markdown("### 🧠 AI-Powered Career Insights")
+                                            
+                                            # Check if parsed data contains NLP insights
+                                            parsed_data_dict = parsed_data.model_dump()
+                                            
+                                            if parsed_data_dict.get('nlp_insights'):
+                                                insights_data = parsed_data_dict['nlp_insights']
+                                                career_insights = insights_data.get('career_insights')
+                                                
+                                                if career_insights:
+                                                    # Handle both dictionary and object formats
+                                                    if hasattr(career_insights, 'overall_score'):
+                                                        # It's a CareerInsights object, convert to dict
+                                                        career_insights = career_insights.__dict__
+                                                    
+                                                    # Overall Score
+                                                    st.markdown("#### 📊 Overall Profile Assessment")
+                                                    score = career_insights.get('overall_score', 0)
+                                                    score_percentage = score * 100
+                                                    
+                                                    # Create a progress bar for the score
+                                                    col1, col2 = st.columns([3, 1])
+                                                    with col1:
+                                                        st.progress(score)
+                                                    with col2:
+                                                        color = "🟢" if score >= 0.7 else "🟡" if score >= 0.5 else "🔴"
+                                                        st.markdown(f"**{color} {score_percentage:.0f}%**")
+                                                    
+                                                    # Career Trajectory
+                                                    st.markdown("#### 🚀 Career Trajectory Analysis")
+                                                    trajectory = career_insights.get('career_trajectory', {})
+                                                    
+                                                    col1, col2, col3 = st.columns(3)
+                                                    with col1:
+                                                        seniority = trajectory.get('seniority_level', 'Unknown').title()
+                                                        st.markdown(f"""
+                                                        <div style="background-color: #e3f2fd; padding: 10px; border-radius: 8px; text-align: center;">
+                                                            <h5 style="margin: 0;">👑 Seniority Level</h5>
+                                                            <p style="margin: 5px 0; font-size: 16px; font-weight: bold;">{seniority}</p>
+                                                        </div>
+                                                        """, unsafe_allow_html=True)
+                                                    
+                                                    with col2:
+                                                        progression = trajectory.get('career_progression', 'Unknown').title()
+                                                        st.markdown(f"""
+                                                        <div style="background-color: #f3e5f5; padding: 10px; border-radius: 8px; text-align: center;">
+                                                            <h5 style="margin: 0;">📈 Progression</h5>
+                                                            <p style="margin: 5px 0; font-size: 16px; font-weight: bold;">{progression}</p>
+                                                        </div>
+                                                        """, unsafe_allow_html=True)
+                                                    
+                                                    with col3:
+                                                        industry = trajectory.get('industry_focus', 'Generalist').title()
+                                                        st.markdown(f"""
+                                                        <div style="background-color: #e8f5e8; padding: 10px; border-radius: 8px; text-align: center;">
+                                                            <h5 style="margin: 0;">🎯 Industry Focus</h5>
+                                                            <p style="margin: 5px 0; font-size: 16px; font-weight: bold;">{industry}</p>
+                                                        </div>
+                                                        """, unsafe_allow_html=True)
+                                                    
+                                                    # Skills Analysis
+                                                    st.markdown("#### 💻 Skills Analysis")
+                                                    skills_analysis = career_insights.get('skill_analysis', {})
+                                                    
+                                                    col1, col2 = st.columns(2)
+                                                    with col1:
+                                                        total_skills = skills_analysis.get('total_skills', 0)
+                                                        marketability = skills_analysis.get('marketability_score', 0) * 100
+                                                        st.metric("🛠️ Total Skills", total_skills)
+                                                        st.metric("📈 Marketability Score", f"{marketability:.0f}%")
+                                                        
+                                                        # Core Competencies
+                                                        core_competencies = skills_analysis.get('core_competencies', [])
+                                                        if core_competencies:
+                                                            st.markdown("**🎯 Core Competencies:**")
+                                                            for comp in core_competencies:
+                                                                st.markdown(f"• {comp.replace('_', ' ').title()}")
+                                                    
+                                                    with col2:
+                                                        # Emerging Skills
+                                                        emerging_skills = skills_analysis.get('emerging_skills', [])
+                                                        if emerging_skills:
+                                                            st.markdown("**🚀 Emerging Technologies:**")
+                                                            for skill in emerging_skills:
+                                                                st.markdown(f"• {skill}")
+                                                        
+                                                        # Skill Categories
+                                                        skill_categories = skills_analysis.get('skill_categories', {})
+                                                        if skill_categories:
+                                                            st.markdown("**📊 Skill Distribution:**")
+                                                            for category, skills in skill_categories.items():
+                                                                if skills:
+                                                                    st.markdown(f"• {category.replace('_', ' ').title()}: {len(skills)} skills")
+                                                    
+                                                    # Experience Analysis
+                                                    st.markdown("#### 💼 Experience Analysis")
+                                                    exp_insights = career_insights.get('experience_insights', {})
+                                                    
+                                                    col1, col2, col3 = st.columns(3)
+                                                    with col1:
+                                                        positions = exp_insights.get('total_positions', 0)
+                                                        st.metric("💼 Total Positions", positions)
+                                                    
+                                                    with col2:
+                                                        leadership = exp_insights.get('leadership_indicators', 0)
+                                                        st.metric("👥 Leadership Indicators", leadership)
+                                                    
+                                                    with col3:
+                                                        quality_score = exp_insights.get('experience_quality_score', 0) * 100
+                                                        st.metric("⭐ Experience Quality", f"{quality_score:.0f}%")
+                                                    
+                                                    # Personality Traits
+                                                    st.markdown("#### 🧠 Inferred Personality Traits")
+                                                    personality = career_insights.get('personality_traits', {})
+                                                    dominant_traits = personality.get('dominant_traits', [])
+                                                    
+                                                    if dominant_traits:
+                                                        trait_cols = st.columns(len(dominant_traits))
+                                                        for i, trait in enumerate(dominant_traits):
+                                                            with trait_cols[i]:
+                                                                trait_name = trait.replace('_', ' ').title()
+                                                                st.markdown(f"""
+                                                                <div style="background-color: #fff3cd; padding: 10px; border-radius: 8px; text-align: center;">
+                                                                    <p style="margin: 0; font-weight: bold;">{trait_name}</p>
+                                                                </div>
+                                                                """, unsafe_allow_html=True)
+                                                    else:
+                                                        st.info("No dominant personality traits identified")
+                                                    
+                                                    # Strengths and Improvements
+                                                    st.markdown("#### ✅ Strengths & 🎯 Areas for Improvement")
+                                                    col1, col2 = st.columns(2)
+                                                    
+                                                    with col1:
+                                                        st.markdown("**✅ Key Strengths:**")
+                                                        strengths = career_insights.get('strengths', [])
+                                                        for strength in strengths:
+                                                            st.markdown(f"• {strength}")
+                                                    
+                                                    with col2:
+                                                        st.markdown("**🎯 Areas for Improvement:**")
+                                                        improvements = career_insights.get('areas_for_improvement', [])
+                                                        for improvement in improvements:
+                                                            st.markdown(f"• {improvement}")
+                                                    
+                                                    # Career Recommendations
+                                                    st.markdown("#### 🚀 AI Career Recommendations")
+                                                    recommendations = career_insights.get('career_recommendations', [])
+                                                    
+                                                    for i, rec in enumerate(recommendations, 1):
+                                                        st.markdown(f"""
+                                                        <div style="background-color: #d4edda; padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #28a745;">
+                                                            <p style="margin: 0; font-size: 14px;"><strong>{i}.</strong> {rec}</p>
+                                                        </div>
+                                                        """, unsafe_allow_html=True)
+                                                    
+                                                    # Full Insights Report
+                                                    with st.expander("📊 Detailed AI Analysis Report"):
+                                                        insights_report = insights_data.get('insights_report', '')
+                                                        if insights_report:
+                                                            st.text(insights_report)
+                                                        else:
+                                                            st.info("Detailed report not available")
+                                                
+                                                else:
+                                                    st.info("Career insights data not available")
+                                            
+                                            else:
+                                                st.info("🤖 AI insights will be available after processing your resume with the enhanced parser")
+                                                st.markdown("**What AI insights include:**")
+                                                st.markdown("• Career trajectory analysis")
+                                                st.markdown("• Skill marketability assessment") 
+                                                st.markdown("• Experience quality evaluation")
+                                                st.markdown("• Personality trait inference")
+                                                st.markdown("• Personalized career recommendations")
+                                                st.markdown("• Strengths and improvement areas")
+                                        
+                                        with tab5:
+                                            st.markdown("### 📋 Complete Analysis Data")
                                             st.json(parsed_data_dict)
                                         
                                         # Store resume ID for recommendations
@@ -749,8 +1048,8 @@ def main():
                                             st.json({
                                                 "filename": resume.filename,
                                                 "file_size": f"{resume.file_size / 1024:.2f} KB",
-                                                "processing_time": f"{resume.processing_time:.2f}s",
-                                                "confidence_score": f"{resume.confidence_score:.1f}",
+                                                "processing_time": f"{resume.processing_time:.2f}s" if isinstance(resume.processing_time, (int, float)) else f"{resume.processing_time}s",
+                                                "confidence_score": str(resume.confidence_score),
                                                 "status": "✅ Processed"
                                             })
                                         
@@ -761,13 +1060,23 @@ def main():
                                             with col2a:
                                                 if st.button(f"💼 Get Jobs", key=f"jobs_{resume.id}", use_container_width=True):
                                                     st.session_state.latest_resume_id = resume.id
-                                                    st.session_state.latest_parsed_data = resume.parsed_data
+                                                    # Ensure data is properly formatted as dict
+                                                    parsed_data = resume.parsed_data
+                                                    if isinstance(parsed_data, dict):
+                                                        st.session_state.latest_parsed_data = parsed_data
+                                                    else:
+                                                        st.session_state.latest_parsed_data = {}
                                                     st.success("✅ Resume selected for job matching!")
                                             
                                             with col2b:
                                                 if st.button(f"📚 Get Courses", key=f"courses_{resume.id}", use_container_width=True):
                                                     st.session_state.latest_resume_id = resume.id
-                                                    st.session_state.latest_parsed_data = resume.parsed_data
+                                                    # Ensure data is properly formatted as dict
+                                                    parsed_data = resume.parsed_data
+                                                    if isinstance(parsed_data, dict):
+                                                        st.session_state.latest_parsed_data = parsed_data
+                                                    else:
+                                                        st.session_state.latest_parsed_data = {}
                                                     st.success("✅ Resume selected for course recommendations!")
                                         
                                         with col3:
@@ -1025,169 +1334,299 @@ def main():
         elif page == "📚 Courses":
             st.header("📚 Courses Management")
             
-            col1, col2 = st.columns(2)
+            # Check user permissions
+            if not st.session_state.current_user_id:
+                st.warning("⚠️ Please login to access course functionality")
+                st.stop()
             
-            with col1:
-                st.subheader("➕ Create Course")
-                with st.form("create_course_form"):
-                    course_name = st.text_input("Course Name", value="Introduction to APIs")
-                    provider = st.text_input("Provider/Institution", value="Tech University")
-                    duration = st.text_input("Duration", value="4 weeks")
-                    mode = st.selectbox("Mode", ["Online", "Offline", "Hybrid"])
-                    fees = st.text_input("Fees", value="Free")
-                    description = st.text_area("Description", value="Learn to build APIs with FastAPI")
-                    skills_required = st.text_input("Skills Required (comma separated)", value="Python, FastAPI")
-                    application_deadline = st.date_input("Application Deadline", value=date(2025, 12, 31))
-                    prerequisites = st.text_input("Prerequisites (comma separated)", value="Basics of Python")
-                    
-                    if st.form_submit_button("Create Course"):
-                        try:
-                            data = CourseCreate(
-                                name=course_name,
-                                provider=provider,
-                                duration=duration,
-                                mode=mode,
-                                fees=fees,
-                                description=description,
-                                skills_required=[skill.strip() for skill in skills_required.split(",")],
-                                application_deadline=application_deadline,
-                                prerequisites=[prereq.strip() for prereq in prerequisites.split(",")]
-                            )
-                            
-                            result = course_service.create_course(db, data)
-                            st.success("Status: 201")
-                            st.json({
-                                "id": result.id,
-                                "name": result.name,
-                                "provider": result.provider,
-                                "duration": result.duration,
-                                "mode": result.mode,
-                                "fees": result.fees,
-                                "description": result.description,
-                                "skills_required": result.skills_required,
-                                "application_deadline": str(result.application_deadline),
-                                "prerequisites": result.prerequisites,
-                                "views": result.views
-                            })
-                        except Exception as e:
-                            st.error(f"Error: {str(e)}")
+            current_user = db.query(User).filter(User.id == st.session_state.current_user_id).first()
+            user_type = current_user.user_type.value if current_user else None
             
-            with col2:
-                st.subheader("📋 List Courses")
-                if st.button("Get All Courses"):
+            if user_type == "B2C":
+                st.info("👤 **B2C User Mode**: You can browse and enroll in courses, but cannot create them")
+                
+                # Only show course browsing for B2C users
+                st.subheader("📋 Available Courses")
+                if st.button("Browse All Courses"):
                     try:
                         courses = course_service.list_courses(db)
                         st.success("Status: 200")
                         if courses:
                             for course in courses:
-                                with st.expander(f"Course: {course.name}"):
-                                    st.json({
-                                        "id": course.id,
-                                        "name": course.name,
-                                        "provider": course.provider,
-                                        "duration": course.duration,
-                                        "mode": course.mode,
-                                        "fees": course.fees,
-                                        "description": course.description,
-                                        "skills_required": course.skills_required,
-                                        "application_deadline": str(course.application_deadline),
-                                        "prerequisites": course.prerequisites,
-                                        "views": course.views
-                                    })
+                                with st.expander(f"📚 {course.name} - {course.provider}"):
+                                    col1, col2 = st.columns([2, 1])
+                                    
+                                    with col1:
+                                        st.json({
+                                            "name": course.name,
+                                            "provider": course.provider,
+                                            "duration": course.duration,
+                                            "mode": course.mode,
+                                            "fees": course.fees,
+                                            "description": course.description,
+                                            "skills_required": course.skills_required,
+                                            "application_deadline": str(course.application_deadline),
+                                            "prerequisites": course.prerequisites
+                                        })
+                                    
+                                    with col2:
+                                        st.metric("Views", course.views)
+                                        if st.button(f"📝 Enroll", key=f"enroll_{course.id}"):
+                                            st.success("✅ Enrollment successful! (Demo mode)")
+                                            st.info("💡 In a real system, this would handle payment and enrollment")
                         else:
-                            st.info("No courses found")
+                            st.info("📭 No courses available yet")
                     except Exception as e:
                         st.error(f"Error: {str(e)}")
+                
+            elif user_type == "B2B":
+                # Get organization info
+                org = None
+                if current_user.org_id:
+                    org = db.query(Organization).filter(Organization.id == current_user.org_id).first()
+                
+                if not org:
+                    st.error("❌ Organization not found. Please contact support.")
+                    st.stop()
+                
+                if org.org_type.value != "INSTITUTION":
+                    st.warning("⚠️ Only Educational Institutions can create courses")
+                    st.info("💡 **Your Organization Type**: Company - You can post jobs instead")
+                    st.stop()
+                
+                st.success(f"🏢 **{org.name}** - Institution Mode: You can create and manage courses")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.subheader("➕ Create Course")
+                    with st.form("create_course_form"):
+                        course_name = st.text_input("Course Name", value="Introduction to APIs")
+                        provider = st.text_input("Provider/Institution", value=org.name)
+                        duration = st.text_input("Duration", value="4 weeks")
+                        mode = st.selectbox("Mode", ["Online", "Offline", "Hybrid"])
+                        fees = st.text_input("Fees", value="Free")
+                        description = st.text_area("Description", value="Learn to build APIs with FastAPI")
+                        skills_required = st.text_input("Skills Required (comma separated)", value="Python, FastAPI")
+                        application_deadline = st.date_input("Application Deadline", value=date(2025, 12, 31))
+                        prerequisites = st.text_input("Prerequisites (comma separated)", value="Basics of Python")
+                        
+                        if st.form_submit_button("Create Course"):
+                            try:
+                                data = CourseCreate(
+                                    name=course_name,
+                                    provider=provider,
+                                    duration=duration,
+                                    mode=mode,
+                                    fees=fees,
+                                    description=description,
+                                    skills_required=[skill.strip() for skill in skills_required.split(",")],
+                                    application_deadline=application_deadline,
+                                    prerequisites=[prereq.strip() for prereq in prerequisites.split(",")]
+                                )
+                                
+                                result = course_service.create_course(db, data)
+                                st.success("Status: 201")
+                                st.json({
+                                    "id": result.id,
+                                    "name": result.name,
+                                    "provider": result.provider,
+                                    "duration": result.duration,
+                                    "mode": result.mode,
+                                    "fees": result.fees,
+                                    "description": result.description,
+                                    "skills_required": result.skills_required,
+                                    "application_deadline": str(result.application_deadline),
+                                    "prerequisites": result.prerequisites,
+                                    "views": result.views
+                                })
+                            except Exception as e:
+                                st.error(f"Error: {str(e)}")
+                
+                with col2:
+                    st.subheader("📋 List Courses")
+                    if st.button("Get All Courses"):
+                        try:
+                            courses = course_service.list_courses(db)
+                            st.success("Status: 200")
+                            if courses:
+                                for course in courses:
+                                    with st.expander(f"Course: {course.name}"):
+                                        st.json({
+                                            "id": course.id,
+                                            "name": course.name,
+                                            "provider": course.provider,
+                                            "duration": course.duration,
+                                            "mode": course.mode,
+                                            "fees": course.fees,
+                                            "description": course.description,
+                                            "skills_required": course.skills_required,
+                                            "application_deadline": str(course.application_deadline),
+                                            "prerequisites": course.prerequisites,
+                                            "views": course.views
+                                        })
+                            else:
+                                st.info("No courses found")
+                        except Exception as e:
+                            st.error(f"Error: {str(e)}")
         
         # Jobs endpoints
         elif page == "💼 Jobs":
             st.header("💼 Jobs Management")
             
-            col1, col2 = st.columns(2)
+            # Check user permissions
+            if not st.session_state.current_user_id:
+                st.warning("⚠️ Please login to access job functionality")
+                st.stop()
             
-            with col1:
-                st.subheader("➕ Create Job")
-                with st.form("create_job_form"):
-                    job_title = st.text_input("Job Title", value="Backend Engineer")
-                    company_name = st.text_input("Company Name", value="Tech Corp")
-                    job_type = st.selectbox("Job Type", ["Full-time", "Internship", "Contract", "Part-time"])
-                    location = st.text_input("Location", value="Remote")
-                    salary_range = st.text_input("Salary Range", value="$80k-$120k")
-                    responsibilities = st.text_area("Responsibilities", value="Build APIs and backend services")
-                    skills_required = st.text_input("Skills Required (comma separated)", value="Python, FastAPI, SQL")
-                    application_deadline = st.date_input("Application Deadline", value=date(2025, 11, 30))
-                    industry = st.text_input("Industry", value="Software")
-                    remote_option = st.selectbox("Remote Option", ["Remote", "On-site", "Hybrid"])
-                    experience_level = st.selectbox("Experience Level", ["Entry", "Mid", "Senior"])
-                    number_of_openings = st.number_input("Number of Openings", min_value=1, value=2)
-                    
-                    if st.form_submit_button("Create Job"):
-                        try:
-                            data = JobCreate(
-                                title=job_title,
-                                company_name=company_name,
-                                job_type=job_type,
-                                location=location,
-                                salary_range=salary_range,
-                                responsibilities=responsibilities,
-                                skills_required=[skill.strip() for skill in skills_required.split(",")],
-                                application_deadline=application_deadline,
-                                industry=industry,
-                                remote_option=remote_option,
-                                experience_level=experience_level,
-                                number_of_openings=number_of_openings
-                            )
-                            
-                            result = job_service.create_job(db, data)
-                            st.success("Status: 201")
-                            st.json({
-                                "id": result.id,
-                                "title": result.title,
-                                "company_name": result.company_name,
-                                "job_type": result.job_type,
-                                "location": result.location,
-                                "salary_range": result.salary_range,
-                                "responsibilities": result.responsibilities,
-                                "skills_required": result.skills_required,
-                                "application_deadline": str(result.application_deadline),
-                                "industry": result.industry,
-                                "remote_option": result.remote_option,
-                                "experience_level": result.experience_level,
-                                "number_of_openings": result.number_of_openings,
-                                "views": result.views
-                            })
-                        except Exception as e:
-                            st.error(f"Error: {str(e)}")
+            current_user = db.query(User).filter(User.id == st.session_state.current_user_id).first()
+            user_type = current_user.user_type.value if current_user else None
             
-            with col2:
-                st.subheader("📋 List Jobs")
-                if st.button("Get All Jobs"):
+            if user_type == "B2C":
+                st.info("👤 **B2C User Mode**: You can browse and apply for jobs, but cannot create them")
+                
+                # Only show job browsing for B2C users
+                st.subheader("📋 Available Jobs")
+                if st.button("Browse All Jobs"):
                     try:
                         jobs = job_service.list_jobs(db)
                         st.success("Status: 200")
                         if jobs:
                             for job in jobs:
-                                with st.expander(f"Job: {job.title}"):
-                                    st.json({
-                                        "id": job.id,
-                                        "title": job.title,
-                                        "company_name": job.company_name,
-                                        "job_type": job.job_type,
-                                        "location": job.location,
-                                        "salary_range": job.salary_range,
-                                        "responsibilities": job.responsibilities,
-                                        "skills_required": job.skills_required,
-                                        "application_deadline": str(job.application_deadline),
-                                        "industry": job.industry,
-                                        "remote_option": job.remote_option,
-                                        "experience_level": job.experience_level,
-                                        "number_of_openings": job.number_of_openings,
-                                        "views": job.views
-                                    })
+                                with st.expander(f"💼 {job.title} at {getattr(job, 'company_name', 'Unknown Company')}"):
+                                    col1, col2 = st.columns([2, 1])
+                                    
+                                    with col1:
+                                        st.json({
+                                            "title": job.title,
+                                            "company_name": getattr(job, 'company_name', 'Unknown Company'),
+                                            "location": job.location,
+                                            "job_type": job.job_type,
+                                            "salary_range": job.salary_range,
+                                            "responsibilities": job.responsibilities,
+                                            "skills_required": job.skills_required,
+                                            "application_deadline": str(job.application_deadline),
+                                            "industry": job.industry,
+                                            "remote_option": job.remote_option,
+                                            "experience_level": job.experience_level,
+                                            "number_of_openings": job.number_of_openings
+                                        })
+                                    
+                                    with col2:
+                                        st.metric("Views", job.views)
+                                        st.metric("Openings", job.number_of_openings)
+                                        if st.button(f"📋 Apply", key=f"apply_{job.id}"):
+                                            st.success("✅ Application submitted! (Demo mode)")
+                                            st.info("💡 In a real system, this would redirect to the application portal")
                         else:
-                            st.info("No jobs found")
+                            st.info("📭 No jobs available yet")
                     except Exception as e:
                         st.error(f"Error: {str(e)}")
+                
+            elif user_type == "B2B":
+                # Get organization info
+                org = None
+                if current_user.org_id:
+                    org = db.query(Organization).filter(Organization.id == current_user.org_id).first()
+                
+                if not org:
+                    st.error("❌ Organization not found. Please contact support.")
+                    st.stop()
+                
+                if org.org_type.value != "COMPANY":
+                    st.warning("⚠️ Only Companies can post jobs")
+                    st.info("💡 **Your Organization Type**: Institution - You can create courses instead")
+                    st.stop()
+                
+                st.success(f"🏢 **{org.name}** - Company Mode: You can post and manage jobs")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.subheader("➕ Create Job")
+                    with st.form("create_job_form"):
+                        job_title = st.text_input("Job Title", value="Backend Engineer")
+                        company_name = st.text_input("Company Name", value=org.name)
+                        job_type = st.selectbox("Job Type", ["Full-time", "Internship", "Contract", "Part-time"])
+                        location = st.text_input("Location", value="Remote")
+                        salary_range = st.text_input("Salary Range", value="$80k-$120k")
+                        responsibilities = st.text_area("Responsibilities", value="Build APIs and backend services")
+                        skills_required = st.text_input("Skills Required (comma separated)", value="Python, FastAPI, SQL")
+                        application_deadline = st.date_input("Application Deadline", value=date(2025, 11, 30))
+                        industry = st.text_input("Industry", value="Software")
+                        remote_option = st.selectbox("Remote Option", ["Remote", "On-site", "Hybrid"])
+                        experience_level = st.selectbox("Experience Level", ["Entry", "Mid", "Senior"])
+                        number_of_openings = st.number_input("Number of Openings", min_value=1, value=2)
+                        
+                        if st.form_submit_button("Create Job"):
+                            try:
+                                data = JobCreate(
+                                    title=job_title,
+                                    company_name=company_name,
+                                    job_type=job_type,
+                                    location=location,
+                                    salary_range=salary_range,
+                                    responsibilities=responsibilities,
+                                    skills_required=[skill.strip() for skill in skills_required.split(",")],
+                                    application_deadline=application_deadline,
+                                    industry=industry,
+                                    remote_option=remote_option,
+                                    experience_level=experience_level,
+                                    number_of_openings=number_of_openings
+                                )
+                                
+                                result = job_service.create_job(db, data)
+                                st.success("Status: 201")
+                                st.json({
+                                    "id": result.id,
+                                    "title": result.title,
+                                    "company_name": result.company_name,
+                                    "job_type": result.job_type,
+                                    "location": result.location,
+                                    "salary_range": result.salary_range,
+                                    "responsibilities": result.responsibilities,
+                                    "skills_required": result.skills_required,
+                                    "application_deadline": str(result.application_deadline),
+                                    "industry": result.industry,
+                                    "remote_option": result.remote_option,
+                                    "experience_level": result.experience_level,
+                                    "number_of_openings": result.number_of_openings,
+                                    "views": result.views
+                                })
+                            except Exception as e:
+                                st.error(f"Error: {str(e)}")
+                
+                with col2:
+                    st.subheader("📋 List Jobs")
+                    if st.button("Get All Jobs"):
+                        try:
+                            jobs = job_service.list_jobs(db)
+                            st.success("Status: 200")
+                            if jobs:
+                                for job in jobs:
+                                    with st.expander(f"Job: {job.title}"):
+                                        st.json({
+                                            "id": job.id,
+                                            "title": job.title,
+                                            "company_name": job.company_name,
+                                            "job_type": job.job_type,
+                                            "location": job.location,
+                                            "salary_range": job.salary_range,
+                                            "responsibilities": job.responsibilities,
+                                            "skills_required": job.skills_required,
+                                            "application_deadline": str(job.application_deadline),
+                                            "industry": job.industry,
+                                            "remote_option": job.remote_option,
+                                            "experience_level": job.experience_level,
+                                            "number_of_openings": job.number_of_openings,
+                                            "views": job.views
+                                        })
+                            else:
+                                st.info("No jobs found")
+                        except Exception as e:
+                            st.error(f"Error: {str(e)}")
+            else:
+                st.error("❌ Please login to access this functionality")
         
         # Organizations endpoints
         elif page == "🏢 Organizations":

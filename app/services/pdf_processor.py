@@ -216,7 +216,179 @@ class PDFProcessor:
         
         return sections
     
+    def extract_education_from_tables(self, tables: List[Dict]) -> List[Dict]:
+        """
+        Extract education information specifically from table structures
+        Common in resumes where education is presented in tabular format
+        """
+        education_entries = []
+        
+        for table_data in tables:
+            if not table_data.get("dataframe_dict"):
+                continue
+                
+            # Check if this table contains education data
+            headers = [str(h).lower() for h in table_data.get("headers", [])]
+            education_keywords = ['education', 'degree', 'university', 'college', 'school', 'qualification', 'academic']
+            
+            # Check if table contains education-related headers
+            has_education_headers = any(keyword in ' '.join(headers) for keyword in education_keywords)
+            
+            if has_education_headers:
+                rows = table_data.get("dataframe_dict", [])
+                
+                for row in rows:
+                    # Convert row values to strings and clean them
+                    row_values = [str(v).strip() for v in row.values() if v and str(v).strip()]
+                    row_text = ' '.join(row_values).lower()
+                    
+                    # Check if this row contains education data
+                    if any(keyword in row_text for keyword in education_keywords):
+                        education_entry = self._parse_education_row(row, headers)
+                        if education_entry:
+                            education_entries.append(education_entry)
+            
+            # Also check rows for education patterns even without education headers
+            else:
+                rows = table_data.get("dataframe_dict", [])
+                for row in rows:
+                    row_values = [str(v).strip() for v in row.values() if v and str(v).strip()]
+                    row_text = ' '.join(row_values).lower()
+                    
+                    # Look for degree patterns
+                    degree_patterns = [
+                        r'\b(bachelor|master|phd|doctorate|diploma|certificate|b\.?s\.?|m\.?s\.?|b\.?a\.?|m\.?a\.?|b\.?tech|m\.?tech)\b',
+                        r'\b(undergraduate|graduate|postgraduate)\b'
+                    ]
+                    
+                    has_degree = any(re.search(pattern, row_text) for pattern in degree_patterns)
+                    
+                    if has_degree:
+                        education_entry = self._parse_education_row(row, headers)
+                        if education_entry:
+                            education_entries.append(education_entry)
+        
+        return education_entries
+    
+    def _parse_education_row(self, row: Dict, headers: List[str]) -> Dict:
+        """Parse a single table row to extract education information"""
+        education = {
+            "degree": "",
+            "field": "",
+            "institution": "",
+            "graduation_date": "",
+            "gpa": "",
+            "location": ""
+        }
+        
+        # Convert headers to lowercase for matching
+        headers_lower = [str(h).lower() for h in headers]
+        
+        # Map headers to education fields
+        header_mappings = {
+            'degree': ['degree', 'qualification', 'program', 'course'],
+            'field': ['field', 'major', 'specialization', 'subject', 'stream'],
+            'institution': ['university', 'college', 'school', 'institution', 'institute'],
+            'graduation_date': ['year', 'date', 'graduation', 'completion', 'passed'],
+            'gpa': ['gpa', 'grade', 'marks', 'score', 'cgpa'],
+            'location': ['location', 'city', 'place']
+        }
+        
+        # Extract information based on header mappings
+        for field, keywords in header_mappings.items():
+            for i, header in enumerate(headers_lower):
+                if any(keyword in header for keyword in keywords):
+                    value = list(row.values())[i] if i < len(row.values()) else ""
+                    if value and str(value).strip():
+                        education[field] = str(value).strip()
+                        break
+        
+        # If no header mapping worked, try to extract from row values using patterns
+        row_values = [str(v).strip() for v in row.values() if v and str(v).strip()]
+        combined_text = ' '.join(row_values)
+        
+        # Extract degree using patterns
+        if not education["degree"]:
+            degree_patterns = [
+                r'\b(Bachelor[\'s]?\s+of\s+\w+|B\.?[AS]\.?(?:\s+\w+)?|Bachelor[\'s]?)\b',
+                r'\b(Master[\'s]?\s+of\s+\w+|M\.?[AS]\.?(?:\s+\w+)?|Master[\'s]?)\b',
+                r'\b(Ph\.?D\.?|Doctor\s+of\s+\w+|Doctorate)\b',
+                r'\b(Diploma|Certificate)\b'
+            ]
+            
+            for pattern in degree_patterns:
+                match = re.search(pattern, combined_text, re.IGNORECASE)
+                if match:
+                    education["degree"] = match.group().strip()
+                    break
+        
+        # Extract institution using patterns (typically longer strings, proper nouns)
+        if not education["institution"]:
+            # Look for words that are likely institution names (capitalized, longer)
+            words = combined_text.split()
+            for i, word in enumerate(words):
+                if len(word) > 3 and word[0].isupper():
+                    # Check if this and following words form an institution name
+                    potential_institution = []
+                    for j in range(i, min(i + 4, len(words))):
+                        if words[j][0].isupper() or words[j].lower() in ['of', 'and', 'the']:
+                            potential_institution.append(words[j])
+                        else:
+                            break
+                    
+                    if len(potential_institution) >= 2:
+                        education["institution"] = ' '.join(potential_institution)
+                        break
+        
+        # Extract year/date patterns
+        if not education["graduation_date"]:
+            year_pattern = r'\b(19|20)\d{2}\b'
+            year_match = re.search(year_pattern, combined_text)
+            if year_match:
+                education["graduation_date"] = year_match.group()
+        
+        # Extract GPA patterns
+        if not education["gpa"]:
+            gpa_patterns = [
+                r'\b(\d+\.?\d*)\s*/\s*(\d+\.?\d*)\b',  # X/Y format
+                r'\bGPA:?\s*(\d+\.?\d*)\b',
+                r'\b(\d+\.?\d*)\s*GPA\b'
+            ]
+            
+            for pattern in gpa_patterns:
+                match = re.search(pattern, combined_text, re.IGNORECASE)
+                if match:
+                    education["gpa"] = match.group().strip()
+                    break
+        
+        # Only return if we found meaningful information
+        if education["degree"] or education["institution"] or education["field"]:
+            return education
+        
+        return None
+    
     def validate_pdf(self, file_path: str) -> Tuple[bool, str]:
+        """Validate PDF file and return status with message"""
+        try:
+            if not Path(file_path).exists():
+                return False, "File does not exist"
+            
+            if not file_path.lower().endswith('.pdf'):
+                return False, "File is not a PDF"
+            
+            with pdfplumber.open(file_path) as pdf:
+                if len(pdf.pages) == 0:
+                    return False, "PDF has no pages"
+                
+                # Check if we can extract any text
+                first_page_text = pdf.pages[0].extract_text()
+                if not first_page_text or len(first_page_text.strip()) < 10:
+                    return False, "PDF appears to be image-only or has no extractable text"
+            
+            return True, "PDF is valid and processable"
+            
+        except Exception as e:
+            return False, f"Error validating PDF: {str(e)}"
         """Validate PDF file and return status with message"""
         try:
             if not Path(file_path).exists():

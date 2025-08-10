@@ -3,6 +3,12 @@
 Database setup script to create all tables
 """
 
+import sys
+import os
+
+# Add parent directory to path so we can import from app
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from database.db_setup import Base, engine
 from app.models.user import User
 from app.models.profile import Organization
