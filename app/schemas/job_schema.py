@@ -25,6 +25,7 @@ class ExperienceLevel(str, Enum):
 
 class JobBase(BaseModel):
     title: str = Field(..., min_length=1, description="Job title")
+    company_name: Optional[str] = Field(None, description="Company name")
     job_type: JobType = Field(..., description="Job type Full-time / Internship)")
     location: str = Field(..., min_length=1, description="Job location")
     salary_range: str = Field(..., min_length=1, description="Salary range")

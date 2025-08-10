@@ -45,7 +45,7 @@ def main():
     try:
         # Import core functions
         from database.db_setup import Base, engine
-        from app.services import course_service, job_service, profile_service
+        from app.services import course_service, job_service
         from app.schemas.course_schema import CourseCreate
         from app.schemas.job_schema import JobCreate
         from app.utils.auth import get_password_hash, create_access_token, verify_password
@@ -839,6 +839,7 @@ def main():
                                                 with st.expander(f"💼 #{i+1}: {rec['job'].title} - Match: {rec['score']:.1f}"):
                                                     job_data = {
                                                         "title": rec['job'].title,
+                                                        "company_name": getattr(rec['job'], 'company_name', 'Unknown Company'),
                                                         "location": rec['job'].location,
                                                         "job_type": rec['job'].job_type,
                                                         "salary_range": rec['job'].salary_range,
@@ -881,6 +882,7 @@ def main():
                                                 with st.expander(f"📚 #{i+1}: {rec['course'].name} - Relevance: {rec['score']:.1f}"):
                                                     course_data = {
                                                         "name": rec['course'].name,
+                                                        "provider": getattr(rec['course'], 'provider', 'Unknown Provider'),
                                                         "duration": rec['course'].duration,
                                                         "mode": rec['course'].mode,
                                                         "fees": rec['course'].fees,
@@ -1029,6 +1031,7 @@ def main():
                 st.subheader("➕ Create Course")
                 with st.form("create_course_form"):
                     course_name = st.text_input("Course Name", value="Introduction to APIs")
+                    provider = st.text_input("Provider/Institution", value="Tech University")
                     duration = st.text_input("Duration", value="4 weeks")
                     mode = st.selectbox("Mode", ["Online", "Offline", "Hybrid"])
                     fees = st.text_input("Fees", value="Free")
@@ -1041,6 +1044,7 @@ def main():
                         try:
                             data = CourseCreate(
                                 name=course_name,
+                                provider=provider,
                                 duration=duration,
                                 mode=mode,
                                 fees=fees,
@@ -1055,6 +1059,7 @@ def main():
                             st.json({
                                 "id": result.id,
                                 "name": result.name,
+                                "provider": result.provider,
                                 "duration": result.duration,
                                 "mode": result.mode,
                                 "fees": result.fees,
@@ -1079,6 +1084,7 @@ def main():
                                     st.json({
                                         "id": course.id,
                                         "name": course.name,
+                                        "provider": course.provider,
                                         "duration": course.duration,
                                         "mode": course.mode,
                                         "fees": course.fees,
@@ -1103,6 +1109,7 @@ def main():
                 st.subheader("➕ Create Job")
                 with st.form("create_job_form"):
                     job_title = st.text_input("Job Title", value="Backend Engineer")
+                    company_name = st.text_input("Company Name", value="Tech Corp")
                     job_type = st.selectbox("Job Type", ["Full-time", "Internship", "Contract", "Part-time"])
                     location = st.text_input("Location", value="Remote")
                     salary_range = st.text_input("Salary Range", value="$80k-$120k")
@@ -1118,6 +1125,7 @@ def main():
                         try:
                             data = JobCreate(
                                 title=job_title,
+                                company_name=company_name,
                                 job_type=job_type,
                                 location=location,
                                 salary_range=salary_range,
@@ -1135,6 +1143,7 @@ def main():
                             st.json({
                                 "id": result.id,
                                 "title": result.title,
+                                "company_name": result.company_name,
                                 "job_type": result.job_type,
                                 "location": result.location,
                                 "salary_range": result.salary_range,
@@ -1162,6 +1171,7 @@ def main():
                                     st.json({
                                         "id": job.id,
                                         "title": job.title,
+                                        "company_name": job.company_name,
                                         "job_type": job.job_type,
                                         "location": job.location,
                                         "salary_range": job.salary_range,

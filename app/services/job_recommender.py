@@ -30,28 +30,36 @@ class JobRecommender:
     def get_recommendations(
         self, 
         parsed_resume: Dict[str, Any], 
-        db: Session,
+        jobs_list: List[Job] = None,
+        db: Session = None,
         limit: int = 20
-    ) -> List[JobRecommendationResponse]:
+    ) -> List[Dict[str, Any]]:
         """
         Get job recommendations based on parsed resume data
         
         Args:
             parsed_resume: Parsed resume data from LangGraph
-            db: Database session
+            jobs_list: List of jobs to evaluate (if provided, used instead of db query)
+            db: Database session (optional if jobs_list is provided)
             limit: Maximum number of recommendations
             
         Returns:
-            List of job recommendations with match scores
+            List of job recommendations with match scores in dictionary format
         """
         try:
             # Extract candidate profile
             candidate_profile = self._extract_candidate_profile(parsed_resume)
             
-            # Get all active jobs (use application_deadline to filter active jobs)
-            from datetime import date
-            current_date = date.today()
-            jobs = db.query(Job).filter(Job.application_deadline >= current_date).all()
+            # Get jobs list
+            if jobs_list is not None:
+                jobs = jobs_list
+            elif db is not None:
+                # Get all active jobs (use application_deadline to filter active jobs)
+                from datetime import date
+                current_date = date.today()
+                jobs = db.query(Job).filter(Job.application_deadline >= current_date).all()
+            else:
+                raise ValueError("Either jobs_list or db must be provided")
             
             if not jobs:
                 return []
@@ -66,33 +74,18 @@ class JobRecommender:
                 if match_score > 0.1:  # Only include jobs with decent match
                     job_scores.append({
                         'job': job,
+                        'score': match_score,
                         'match_score': match_score,
                         'matching_skills': matching_skills,
                         'skill_gaps': skill_gaps,
+                        'reasons': [reason],
                         'recommendation_reason': reason
                     })
             
             # Sort by match score
-            job_scores.sort(key=lambda x: x['match_score'], reverse=True)
+            job_scores.sort(key=lambda x: x['score'], reverse=True)
             
-            # Convert to response objects
-            recommendations = []
-            for job_data in job_scores[:limit]:
-                job = job_data['job']
-                
-                recommendation = JobRecommendationResponse(
-                    job_id=job.id,
-                    title=job.title,
-                    company=job.company_name,
-                    location=job.location,
-                    match_score=round(job_data['match_score'], 3),
-                    matching_skills=job_data['matching_skills'],
-                    skill_gaps=job_data['skill_gaps'],
-                    recommendation_reason=job_data['recommendation_reason']
-                )
-                recommendations.append(recommendation)
-            
-            return recommendations
+            return job_scores[:limit]
             
         except Exception as e:
             logger.error(f"Error getting job recommendations: {e}")

@@ -9,6 +9,7 @@ class Job(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
+    company_name = Column(String, nullable=True)  # Added company name field
     job_type = Column(Enum(JobType), nullable=False)
     location = Column(String, nullable=False)
     salary_range = Column(String, nullable=False)

@@ -77,26 +77,34 @@ class CourseRecommender:
     def get_recommendations(
         self, 
         parsed_resume: Dict[str, Any], 
-        db: Session,
+        courses_list: List[Course] = None,
+        db: Session = None,
         limit: int = 15
-    ) -> List[CourseRecommendationResponse]:
+    ) -> List[Dict[str, Any]]:
         """
         Get course recommendations based on parsed resume data
         
         Args:
             parsed_resume: Parsed resume data from LangGraph
-            db: Database session
+            courses_list: List of courses to evaluate (if provided, used instead of db query)
+            db: Database session (optional if courses_list is provided)
             limit: Maximum number of recommendations
             
         Returns:
-            List of course recommendations with relevance scores
+            List of course recommendations with relevance scores in dictionary format
         """
         try:
             # Analyze candidate profile
             candidate_analysis = self._analyze_candidate_profile(parsed_resume)
             
-            # Get all available courses
-            courses = db.query(Course).filter(Course.is_active == True).all()
+            # Get courses list
+            if courses_list is not None:
+                courses = courses_list
+            elif db is not None:
+                # Get all available courses
+                courses = db.query(Course).all()  # Remove is_active filter since Course model doesn't have it
+            else:
+                raise ValueError("Either courses_list or db must be provided")
             
             if not courses:
                 return []
@@ -111,30 +119,17 @@ class CourseRecommender:
                 if relevance_score > 0.1:  # Only include relevant courses
                     course_scores.append({
                         'course': course,
+                        'score': relevance_score,
                         'relevance_score': relevance_score,
                         'skill_gaps_addressed': skill_gaps,
-                        'career_impact': career_impact
+                        'career_impact': career_impact,
+                        'reasons': [career_impact]
                     })
             
             # Sort by relevance score
-            course_scores.sort(key=lambda x: x['relevance_score'], reverse=True)
+            course_scores.sort(key=lambda x: x['score'], reverse=True)
             
-            # Convert to response objects
-            recommendations = []
-            for course_data in course_scores[:limit]:
-                course = course_data['course']
-                
-                recommendation = CourseRecommendationResponse(
-                    course_id=course.id,
-                    title=course.title,
-                    provider=course.provider,
-                    relevance_score=round(course_data['relevance_score'], 3),
-                    skill_gaps_addressed=course_data['skill_gaps_addressed'],
-                    career_impact=course_data['career_impact']
-                )
-                recommendations.append(recommendation)
-            
-            return recommendations
+            return course_scores[:limit]
             
         except Exception as e:
             logger.error(f"Error getting course recommendations: {e}")
@@ -203,21 +198,25 @@ class CourseRecommender:
                 course_skills
             )
             
+            # For course category, try to infer from course name/description since Course model doesn't have category
+            course_category = self._infer_course_category(course)
+            
             career_alignment_score = self._calculate_career_alignment(
                 candidate_analysis['career_focus'],
                 course_skills,
-                course.category
+                course_category
             )
             
+            # Since Course model doesn't have difficulty_level, we'll use a default score
             experience_appropriateness = self._calculate_experience_appropriateness(
                 candidate_analysis['experience_level'],
-                course.difficulty_level
+                None  # No difficulty level available
             )
             
             learning_priority_score = self._calculate_learning_priority_match(
                 candidate_analysis['learning_priorities'],
                 course_skills,
-                course.category
+                course_category
             )
             
             # Calculate weighted overall relevance score
@@ -249,7 +248,7 @@ class CourseRecommender:
     
     def _extract_course_skills(self, course: Course) -> List[str]:
         """Extract skills taught in the course"""
-        course_text = f"{course.title} {course.description} {course.skills_taught}".lower()
+        course_text = f"{course.name} {course.description}".lower()
         
         # Common technical skills
         all_skills = []
@@ -262,25 +261,47 @@ class CourseRecommender:
             if skill.lower() in course_text:
                 found_skills.append(skill)
         
-        # Also extract from skills_taught field if it's a JSON array
+        # Also extract from skills_required field if it exists
         try:
-            if course.skills_taught:
-                if isinstance(course.skills_taught, str):
+            if hasattr(course, 'skills_required') and course.skills_required:
+                if isinstance(course.skills_required, str):
                     # Try to parse as JSON
                     try:
-                        skills_list = json.loads(course.skills_taught)
+                        skills_list = json.loads(course.skills_required)
                         if isinstance(skills_list, list):
                             found_skills.extend([skill.lower() for skill in skills_list])
                     except:
                         # If not JSON, treat as comma-separated
-                        skills_list = course.skills_taught.split(',')
+                        skills_list = course.skills_required.split(',')
                         found_skills.extend([skill.strip().lower() for skill in skills_list])
-                elif isinstance(course.skills_taught, list):
-                    found_skills.extend([skill.lower() for skill in course.skills_taught])
+                elif isinstance(course.skills_required, list):
+                    found_skills.extend([skill.lower() for skill in course.skills_required])
         except:
             pass
         
         return list(set(found_skills))
+    
+    def _infer_course_category(self, course: Course) -> str:
+        """Infer course category from name and description"""
+        course_text = f"{course.name} {course.description}".lower()
+        
+        # Category keywords mapping
+        category_keywords = {
+            'programming': ['programming', 'coding', 'software', 'development'],
+            'data science': ['data', 'analytics', 'machine learning', 'ai', 'statistics'],
+            'web development': ['web', 'frontend', 'backend', 'html', 'css', 'javascript'],
+            'cloud': ['cloud', 'aws', 'azure', 'gcp', 'devops'],
+            'cybersecurity': ['security', 'cyber', 'ethical hacking', 'penetration'],
+            'mobile': ['mobile', 'android', 'ios', 'app development'],
+            'business': ['business', 'management', 'leadership', 'marketing'],
+            'design': ['design', 'ui', 'ux', 'graphic']
+        }
+        
+        for category, keywords in category_keywords.items():
+            if any(keyword in course_text for keyword in keywords):
+                return category
+        
+        return 'general'
     
     def _calculate_skill_gap_coverage(
         self, 
@@ -330,7 +351,7 @@ class CourseRecommender:
     def _calculate_experience_appropriateness(
         self, 
         experience_level: str, 
-        course_difficulty: str
+        course_difficulty: str = None
     ) -> float:
         """Calculate if course difficulty matches experience level"""
         if not course_difficulty:
@@ -461,17 +482,16 @@ class CourseRecommender:
         """Generate career impact description"""
         impacts = []
         
-        # General impact based on course category
-        if course.category:
-            category = course.category.lower()
-            if 'leadership' in category or 'management' in category:
-                impacts.append("Enhance leadership and management capabilities")
-            elif 'technical' in category or 'programming' in category:
-                impacts.append("Strengthen technical expertise")
-            elif 'data' in category:
-                impacts.append("Develop data analysis and insights skills")
-            elif 'cloud' in category:
-                impacts.append("Build modern cloud architecture skills")
+        # General impact based on course category (inferred)
+        course_category = self._infer_course_category(course)
+        if 'leadership' in course_category or 'management' in course_category:
+            impacts.append("Enhance leadership and management capabilities")
+        elif 'programming' in course_category or 'development' in course_category:
+            impacts.append("Strengthen technical expertise")
+        elif 'data' in course_category:
+            impacts.append("Develop data analysis and insights skills")
+        elif 'cloud' in course_category:
+            impacts.append("Build modern cloud architecture skills")
         
         # Experience level specific impact
         if experience_level == 'entry':

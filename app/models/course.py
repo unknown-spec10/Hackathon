@@ -8,6 +8,7 @@ class Course(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
+    provider = Column(String, nullable=True)  # Added provider field
     duration = Column(String, nullable=False)
     mode = Column(Enum(CourseMode), nullable=False)
     fees = Column(String, nullable=True)

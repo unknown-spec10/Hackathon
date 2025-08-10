@@ -12,6 +12,7 @@ class CourseMode(str, Enum):
 
 class CourseBase(BaseModel):
     name: str = Field(..., min_length=1, description="Course name")
+    provider: Optional[str] = Field(None, description="Course provider/institution")
     duration: str = Field(..., min_length=1, description="Course duration (e.g., '3 months')")
     mode: CourseMode = Field(..., description="Course mode: Online / Offline / Hybrid")
     fees: Optional[str] = Field(None, min_length=1, description="Course fees (optional)")
