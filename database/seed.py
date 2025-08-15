@@ -1,8 +1,10 @@
 from sqlalchemy.orm import Session
 from database.db_setup import SessionLocal, Base, engine
 from app.models.user import User
-from app.models.job import Job, JobTypeEnum, RemoteOptionEnum, ExperienceLevelEnum
-from app.models.course import Course, CourseModeEnum
+from app.models.job import Job
+from app.schemas.job_schema import JobType, RemoteOption, ExperienceLevel
+from app.models.course import Course
+from app.schemas.course_schema import CourseMode
 from app.models.profile import Organization, OrgTypeEnum
 from datetime import date
 
@@ -12,8 +14,8 @@ def seed():
     db: Session = SessionLocal()
     try:
         # Organizations
-        org1 = Organization(name="Acme Corp", org_type=OrgTypeEnum.COMPANY, address="123 Main St", contact_email="hr@acme.com")
-        org2 = Organization(name="Tech Institute", org_type=OrgTypeEnum.INSTITUTION, address="456 Campus Rd", contact_email="info@tech.edu")
+        org1 = Organization(name="Acme Corp", org_type=OrgTypeEnum.COMPANY, address="123 Main St", contact_email="hr@acme.com", contact_phone="555-1234")
+        org2 = Organization(name="Tech Institute", org_type=OrgTypeEnum.INSTITUTION, address="456 Campus Rd", contact_email="info@tech.edu", contact_phone="555-5678")
         db.add_all([org1, org2])
         db.flush()
 
@@ -25,28 +27,28 @@ def seed():
         # Jobs
         j1 = Job(
             title="Backend Engineer",
-            job_type=JobTypeEnum.FULL_TIME,
+            job_type=JobType.FULL_TIME,
             location="Remote",
             salary_range="$80k-$120k",
             responsibilities="Build APIs",
             skills_required=["Python", "FastAPI", "SQL"],
             application_deadline=date(2025, 12, 31),
             industry="Software",
-            remote_option=RemoteOptionEnum.REMOTE,
-            experience_level=ExperienceLevelEnum.MID,
+            remote_option=RemoteOption.REMOTE,
+            experience_level=ExperienceLevel.MID,
             number_of_openings=2,
         )
         j2 = Job(
             title="Data Intern",
-            job_type=JobTypeEnum.INTERNSHIP,
+            job_type=JobType.INTERNSHIP,
             location="NYC",
             salary_range="$20/hr",
             responsibilities="Support analytics",
             skills_required=["Python", "Pandas"],
             application_deadline=date(2025, 9, 30),
             industry="Analytics",
-            remote_option=RemoteOptionEnum.HYBRID,
-            experience_level=ExperienceLevelEnum.ENTRY,
+            remote_option=RemoteOption.HYBRID,
+            experience_level=ExperienceLevel.ENTRY,
             number_of_openings=1,
         )
         db.add_all([j1, j2])
@@ -55,7 +57,7 @@ def seed():
         c1 = Course(
             name="Intro to APIs",
             duration="4 weeks",
-            mode=CourseModeEnum.ONLINE,
+            mode=CourseMode.ONLINE,
             fees="Free",
             description="Learn to build APIs",
             skills_required=["Python"],
@@ -65,7 +67,7 @@ def seed():
         c2 = Course(
             name="Data Science Bootcamp",
             duration="12 weeks",
-            mode=CourseModeEnum.HYBRID,
+            mode=CourseMode.HYBRID,
             fees="$999",
             description="End-to-end DS",
             skills_required=["Python", "Statistics"],

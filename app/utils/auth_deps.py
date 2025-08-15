@@ -10,11 +10,17 @@ oauth2_scheme = HTTPBearer()
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+    from app.core.settings import settings
+    print(f"DEBUG: SECRET_KEY={settings.SECRET_KEY}")
+    print(f"DEBUG: ALGORITHM={settings.ALGORITHM}")
     """Get the current authenticated user from token."""
     # Extract token from HTTPBearer
     access_token = token.credentials
+    print(f"DEBUG: Incoming token: {access_token}")
     payload = decode_access_token(access_token)
+    print(f"DEBUG: Decoded payload: {payload}")
     if not payload or "sub" not in payload:
+        print("DEBUG: Invalid or expired token.")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
@@ -22,13 +28,16 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         )
 
     user_id = int(payload["sub"])
+    print(f"DEBUG: User ID from token: {user_id}")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
+        print("DEBUG: User not found in database.")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, 
             detail="User not found"
         )
 
+    print(f"DEBUG: Authenticated user: {user}")
     return user
 
 

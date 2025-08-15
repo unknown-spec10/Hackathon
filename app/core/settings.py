@@ -11,9 +11,9 @@ class Settings(BaseSettings):
     ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
     
     # AI/ML API settings
-    GROQ_API_URL: str = "https://api.groq.com/v1"
-    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "your_groq_api_key")
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "your_openai_api_key_here")
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+    GROQ_API_URL: str = os.getenv("GROQ_API_URL", "https://api.groq.com/v1")
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     
     # File upload settings
     MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))

@@ -2,15 +2,25 @@ from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.profile import Organization
 from app.models.resume import Resume
-from app.utils.deps import get_db
+from database.db_setup import SessionLocal
 
 class UserRepository:
     def __init__(self):
-        self.db = next(get_db())
+        self.db = SessionLocal()
+    
+    def close(self):
+        """Close the database session"""
+        self.db.close()
     
     def create_user(self, user_data: dict):
         """Create a new user"""
-        user = User(**user_data)
+        # Only pass fields that exist in the User model
+        allowed_fields = {
+            'username', 'password_hash', 'org_id', 'email', 'user_type',
+            'full_name', 'phone', 'location', 'bio', 'skills', 'experience_years'
+        }
+        filtered_data = {k: v for k, v in user_data.items() if k in allowed_fields}
+        user = User(**filtered_data)
         self.db.add(user)
         self.db.commit()
         self.db.refresh(user)

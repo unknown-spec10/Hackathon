@@ -47,8 +47,13 @@ class JobRecommender:
             List of job recommendations with match scores in dictionary format
         """
         try:
+            # Debug logging
+            logger.info(f"Getting job recommendations for parsed resume with keys: {list(parsed_resume.keys())}")
+            
             # Extract candidate profile
             candidate_profile = self._extract_candidate_profile(parsed_resume)
+            logger.info(f"Candidate profile skills: {candidate_profile['skills']}")
+            logger.info(f"Candidate experience years: {candidate_profile['experience_years']}")
             
             # Get jobs list
             if jobs_list is not None:
@@ -61,6 +66,8 @@ class JobRecommender:
             else:
                 raise ValueError("Either jobs_list or db must be provided")
             
+            logger.info(f"Found {len(jobs)} jobs to evaluate")
+            
             if not jobs:
                 return []
             
@@ -71,16 +78,20 @@ class JobRecommender:
                     candidate_profile, job
                 )
                 
-                if match_score > 0.1:  # Only include jobs with decent match
-                    job_scores.append({
-                        'job': job,
-                        'score': match_score,
-                        'match_score': match_score,
-                        'matching_skills': matching_skills,
-                        'skill_gaps': skill_gaps,
-                        'reasons': [reason],
-                        'recommendation_reason': reason
-                    })
+                logger.info(f"Job '{job.title}': score={match_score:.3f}, matching_skills={matching_skills}, reason={reason}")
+                
+                # TEMPORARILY: Include ALL jobs to debug scores
+                job_scores.append({
+                    'job': job,
+                    'score': match_score,
+                    'match_score': match_score,
+                    'matching_skills': matching_skills,
+                    'skill_gaps': skill_gaps,
+                    'reasons': [reason],
+                    'recommendation_reason': reason
+                })
+            
+            logger.info(f"Found {len(job_scores)} jobs with match score > 0.01")
             
             # Sort by match score
             job_scores.sort(key=lambda x: x['score'], reverse=True)
@@ -89,6 +100,8 @@ class JobRecommender:
             
         except Exception as e:
             logger.error(f"Error getting job recommendations: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return []
     
     def _extract_candidate_profile(self, parsed_resume: Dict[str, Any]) -> Dict[str, Any]:
@@ -164,7 +177,7 @@ class JobRecommender:
             profile['certifications'] = []
         
         # Extract summary
-        profile['summary'] = parsed_resume.get('summary', '')
+        profile['summary'] = str(parsed_resume.get('summary', '')) if parsed_resume.get('summary') is not None else ''
         
         # Identify technologies from skills and experience
         tech_keywords = [
@@ -177,8 +190,8 @@ class JobRecommender:
         
         all_text = ' '.join([
             ' '.join(profile['skills']),
-            ' '.join(profile['experience_descriptions']),
-            profile['summary']
+            ' '.join([desc for desc in profile['experience_descriptions'] if desc is not None]),
+            profile['summary'] or ''
         ]).lower()
         
         profile['technologies'] = [tech for tech in tech_keywords if tech in all_text]
@@ -262,6 +275,19 @@ class JobRecommender:
             'technologies': []
         }
         
+        # Map experience level enum to years
+        if hasattr(job, 'experience_level') and job.experience_level:
+            exp_level = str(job.experience_level).lower()
+            if 'entry' in exp_level:
+                requirements['min_experience'] = 0
+                requirements['max_experience'] = 2
+            elif 'mid' in exp_level:
+                requirements['min_experience'] = 2
+                requirements['max_experience'] = 5
+            elif 'senior' in exp_level:
+                requirements['min_experience'] = 5
+                requirements['max_experience'] = 15
+        
         # Extract skills from job responsibilities and skills_required (handle None values)
         responsibilities_text = job.responsibilities or ''
         
@@ -271,14 +297,16 @@ class JobRecommender:
                 # Filter out None values from the list
                 skills_list = [str(skill) for skill in job.skills_required if skill is not None]
                 skills_text = ' '.join(skills_list)
+                requirements['required_skills'] = skills_list  # Use actual list
             else:
                 skills_text = str(job.skills_required)
+                requirements['required_skills'] = [str(job.skills_required)]
         else:
             skills_text = ''
             
         job_text = f"{responsibilities_text} {skills_text}".lower()
         
-        # Common skill patterns
+        # Common skill patterns (keep for technology extraction)
         skill_patterns = [
             'python', 'java', 'javascript', 'react', 'angular', 'vue', 'node.js',
             'sql', 'mongodb', 'postgresql', 'mysql', 'aws', 'azure', 'gcp',
@@ -291,24 +319,12 @@ class JobRecommender:
         ]
         
         found_skills = [skill for skill in skill_patterns if skill in job_text]
-        requirements['required_skills'] = found_skills
+        # Combine explicit skills with found skills
+        all_skills = list(set(requirements['required_skills'] + found_skills))
+        requirements['required_skills'] = all_skills
         requirements['technologies'] = found_skills
         
-        # Extract experience requirements
-        import re
-        exp_pattern = r'(\d+)\s*(?:\+|\-|to|\-\s*\d+)?\s*years?\s*(?:of\s*)?(?:experience|exp)'
-        exp_matches = re.findall(exp_pattern, job_text, re.IGNORECASE)
-        
-        if exp_matches:
-            try:
-                min_exp = min([int(match) for match in exp_matches])
-                max_exp = max([int(match) for match in exp_matches])
-                requirements['min_experience'] = min_exp
-                requirements['max_experience'] = max_exp
-            except:
-                pass
-        
-        # Extract education requirements
+        # Extract education requirements (keep existing logic)
         if any(word in job_text for word in ['phd', 'doctorate', 'ph.d']):
             requirements['education_level'] = 'doctorate'
         elif any(word in job_text for word in ['master', 'mba', 'ms', 'ma']):
@@ -327,6 +343,9 @@ class JobRecommender:
         if not job_skills:
             return 0.5, [], []
         
+        if not candidate_skills:
+            return 0.2, [], job_skills  # Give some base score even with no skills
+        
         candidate_skills_lower = [skill.lower() for skill in candidate_skills]
         job_skills_lower = [skill.lower() for skill in job_skills]
         
@@ -341,15 +360,39 @@ class JobRecommender:
                    len(job_skill) > 2 and len(candidate_skill) > 2:
                     partial_matches.add(job_skill)
         
-        # Calculate score
-        total_matches = len(exact_matches) + (len(partial_matches) * 0.5)
-        score = min(total_matches / len(job_skills), 1.0)
+        # Find broader category matches (e.g., "programming" matches "python")
+        category_matches = set()
+        skill_categories = {
+            'python': ['programming', 'coding', 'development', 'software'],
+            'sql': ['database', 'data'],
+            'fastapi': ['api', 'web', 'backend'],
+            'pandas': ['data', 'analytics', 'analysis']
+        }
+        
+        for job_skill in job_skills_lower:
+            if job_skill in skill_categories:
+                for category in skill_categories[job_skill]:
+                    if any(category in cs for cs in candidate_skills_lower):
+                        category_matches.add(job_skill)
+        
+        # Calculate score with more generous matching
+        exact_score = len(exact_matches) * 1.0
+        partial_score = len(partial_matches) * 0.7
+        category_score = len(category_matches) * 0.5
+        
+        total_score = exact_score + partial_score + category_score
+        score = min(total_score / len(job_skills), 1.0)
+        
+        # Ensure minimum score for basic qualifications
+        if score < 0.3 and candidate_skills:
+            score = 0.3
         
         # Get matching skills (preserving original case)
         matching_skills = []
         for skill in candidate_skills:
             if skill.lower() in exact_matches or \
-               any(skill.lower() in pm or pm in skill.lower() for pm in partial_matches):
+               any(skill.lower() in pm or pm in skill.lower() for pm in partial_matches) or \
+               any(skill.lower() in cm or cm in skill.lower() for cm in category_matches):
                 matching_skills.append(skill)
         
         # Get skill gaps
@@ -357,7 +400,8 @@ class JobRecommender:
         for job_skill in job_skills:
             if job_skill.lower() not in exact_matches and \
                not any(job_skill.lower() in cs or cs in job_skill.lower() 
-                      for cs in candidate_skills_lower):
+                      for cs in candidate_skills_lower) and \
+               job_skill.lower() not in category_matches:
                 skill_gaps.append(job_skill)
         
         return score, matching_skills, skill_gaps
@@ -369,12 +413,23 @@ class JobRecommender:
         max_required: int
     ) -> float:
         """Calculate experience level matching score"""
+        # If no experience requirements specified, give neutral score
+        if min_required == 0 and max_required == 20:
+            return 0.7
+            
+        # For entry level positions (0-2 years), be very lenient with 0 experience
+        if min_required <= 2 and candidate_years == 0:
+            return 0.8  # Good score for entry level with no experience
+            
         if candidate_years >= min_required and candidate_years <= max_required:
             return 1.0
         elif candidate_years < min_required:
-            # Penalize lack of experience more heavily
+            # Less penalty for being under-experienced, especially for entry level
             gap = min_required - candidate_years
-            return max(0.0, 1.0 - (gap * 0.2))
+            if min_required <= 2:  # Entry level
+                return max(0.6, 1.0 - (gap * 0.1))  # Very gentle penalty
+            else:  # Mid/Senior level
+                return max(0.3, 1.0 - (gap * 0.15))  # Moderate penalty
         else:
             # Over-qualified is less of a penalty
             excess = candidate_years - max_required

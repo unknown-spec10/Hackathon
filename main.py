@@ -1,25 +1,27 @@
-"""
-Hackathon API Main Application
-FastAPI backend with user management, resume processing, AI recommendations, and technical interviews.
-"""
+"""Hackathon API Main Application"""
 from fastapi import FastAPI
 from database.db_setup import Base, engine
-from app.routes import auth_routes, course_routes, job_routes, profile_routes, stat_route, resume_routes, interview_routes
+from app.routes import auth_routes, course_routes, job_routes, profile_routes, stat_route, resume_routes
 
+import logging
 app = FastAPI(title="Hackathon API")
 
-# Database tables creation (handled by setup scripts)
-# Base.metadata.create_all(bind=engine)
+@app.on_event("startup")
+async def startup_event():
+    logging.basicConfig(level=logging.INFO)
+    logging.info("FastAPI startup event triggered.")
 
-# API route registration
+@app.on_event("shutdown")
+async def shutdown_event():
+    logging.info("FastAPI shutdown event triggered.")
+
 app.include_router(auth_routes.router)
 app.include_router(course_routes.router)
 app.include_router(job_routes.router)
 app.include_router(profile_routes.router)
 app.include_router(stat_route.router)
 app.include_router(resume_routes.router)
-app.include_router(interview_routes.router)  # Technical interview chatbot
 
 @app.get("/")
 def root():
-    return {"status": "ok", "message": "Hackathon API with Interview Chatbot is running"}
+    return {"status": "ok", "message": "Hackathon API is running"}

@@ -1,7 +1,4 @@
-"""
-LangGraph Resume Parser with Groq AI Integration
-Workflow: Text Extraction → AI Parsing → NLP Insights → Structured Output
-"""
+"""Enhanced Resume Parser with LangGraph and LangExtract integration"""
 import json
 import re
 import os
@@ -18,13 +15,13 @@ import operator
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from .nlp_insights import NLPInsightsAnalyzer, CareerInsights
+from .langextract_resume_processor import LangExtractResumeProcessor
 
 
 logger = logging.getLogger(__name__)
 
 
 class ResumeState(TypedDict):
-    """Workflow state for resume parsing pipeline"""
     raw_text: str
     cleaned_text: str
     tables_data: List[Dict[str, Any]]
@@ -37,10 +34,10 @@ class ResumeState(TypedDict):
     languages: List[str]
     errors: Annotated[List[str], operator.add]
     processing_stage: str
+    langextract_data: Optional[Dict[str, Any]]
 
 
 class PersonalInfo(BaseModel):
-    """Personal information schema"""
     name: str = Field(description="Full name", default="")
     email: str = Field(description="Email address", default="")
     phone: str = Field(description="Phone number", default="")
@@ -103,20 +100,65 @@ class ParsedResumeData(BaseModel):
 
 
 class LangGraphResumeParser:
-    """Resume parser using LangGraph workflow with Groq"""
+    """Resume parser using LangGraph workflow with Groq and LangExtract"""
     
-    def __init__(self, groq_api_key: str, model_name: str = "mixtral-8x7b-32768"):
+    def __init__(self, groq_api_key: str, model_name: str = "llama3-8b-8192", use_langextract: bool = True):
         self.groq_api_key = groq_api_key
         self.model_name = model_name
-        self.llm = ChatGroq(
-            groq_api_key=groq_api_key,
-            model_name=model_name,
-            temperature=0.1,
-            max_tokens=4000
-        )
+        self.api_key_valid = self._validate_api_key(groq_api_key)
+        self.use_langextract = use_langextract
+        
+        if self.api_key_valid:
+            self.llm = ChatGroq(
+                groq_api_key=groq_api_key,
+                model_name=model_name,
+                temperature=0.1,
+                max_tokens=4000
+            )
+        else:
+            logger.warning("Invalid Groq API key detected, will use NLP fallback for all operations")
+            self.llm = None
+            
+        # Initialize LangExtract processor for enhanced extraction
+        if self.use_langextract:
+            try:
+                self.langextract_processor = LangExtractResumeProcessor()
+                logger.info("LangExtract processor initialized successfully")
+            except Exception as e:
+                logger.warning(f"Failed to initialize LangExtract: {e}, falling back to pattern-based extraction")
+                self.langextract_processor = None
+                self.use_langextract = False
+        else:
+            self.langextract_processor = None
+            
         # Initialize NLP insights analyzer using factory method
         self.insights_analyzer = NLPInsightsAnalyzer.create_with_fallback()
         self.workflow = self._create_workflow()
+    
+    def _validate_api_key(self, api_key: str) -> bool:
+        """Validate the Groq API key by making a simple test request"""
+        if not api_key or len(api_key) < 20:
+            return False
+            
+        try:
+            import requests
+            url = 'https://api.groq.com/openai/v1/chat/completions'
+            headers = {
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json'
+            }
+            data = {
+                'model': self.model_name,
+                'messages': [{'role': 'user', 'content': 'test'}],
+                'max_tokens': 1
+            }
+            
+            response = requests.post(url, headers=headers, json=data, timeout=10)
+            return response.status_code == 200
+            
+        except Exception as e:
+            logger.debug(f"API key validation failed: {e}")
+            return False
     
     def _create_workflow(self) -> StateGraph:
         """Create the LangGraph workflow for resume parsing"""
@@ -124,6 +166,11 @@ class LangGraphResumeParser:
         
         # Add nodes
         workflow.add_node("clean_text", self._clean_text_node)
+        
+        # Add LangExtract node if available
+        if self.use_langextract and self.langextract_processor:
+            workflow.add_node("langextract_enhance", self._langextract_enhance_node)
+        
         workflow.add_node("extract_personal", self._extract_personal_info_node)
         workflow.add_node("extract_skills", self._extract_skills_node)
         workflow.add_node("extract_experience", self._extract_experience_node)
@@ -136,8 +183,14 @@ class LangGraphResumeParser:
         # Define the workflow
         workflow.set_entry_point("clean_text")
         
+        # Sequential flow with LangExtract enhancement
+        if self.use_langextract and self.langextract_processor:
+            workflow.add_edge("clean_text", "langextract_enhance")
+            workflow.add_edge("langextract_enhance", "extract_personal")
+        else:
+            workflow.add_edge("clean_text", "extract_personal")
+            
         # Sequential flow for main extractions
-        workflow.add_edge("clean_text", "extract_personal")
         workflow.add_edge("extract_personal", "extract_skills")
         workflow.add_edge("extract_skills", "extract_experience")
         workflow.add_edge("extract_experience", "extract_education")
@@ -173,15 +226,76 @@ class LangGraphResumeParser:
         
         return state
     
-    def _extract_personal_info_node(self, state: ResumeState) -> ResumeState:
-        """Extract personal information using Groq"""
+    def _langextract_enhance_node(self, state: ResumeState) -> ResumeState:
+        """Enhance extraction using LangExtract for better accuracy"""
         try:
-            prompt = ChatPromptTemplate.from_messages([
-                SystemMessage(content="""Extract personal information from this resume text. Return ONLY a valid JSON object.
+            if not self.langextract_processor:
+                logger.warning("LangExtract processor not available, skipping enhancement")
+                return state
                 
+            # Use LangExtract to get structured data
+            langextract_result = self.langextract_processor.extract_resume_data(state["cleaned_text"])
+            
+            # Store LangExtract results in state for other nodes to use
+            state["langextract_data"] = langextract_result
+            
+            # Pre-populate data from LangExtract if available
+            if langextract_result:
+                # Enhanced personal info
+                if hasattr(langextract_result, 'personal_info') and langextract_result.personal_info:
+                    state["personal_info"] = dict(langextract_result.personal_info)
+                
+                # Enhanced skills
+                if hasattr(langextract_result, 'skills') and langextract_result.skills:
+                    state["skills"] = langextract_result.skills
+                
+                # Enhanced projects
+                if hasattr(langextract_result, 'projects') and langextract_result.projects:
+                    state["projects"] = langextract_result.projects
+                
+                # Enhanced experience
+                if hasattr(langextract_result, 'experience') and langextract_result.experience:
+                    state["experience"] = langextract_result.experience
+                
+                # Enhanced education
+                if hasattr(langextract_result, 'education') and langextract_result.education:
+                    state["education"] = langextract_result.education
+                    
+                logger.info(f"LangExtract enhanced data: {len(getattr(langextract_result, 'projects', []))} projects, {len(getattr(langextract_result, 'skills', []))} skills")
+                
+            state["processing_stage"] = "langextract_enhanced"
+            
+        except Exception as e:
+            logger.error(f"LangExtract enhancement error: {str(e)}")
+            state["errors"].append(f"LangExtract enhancement error: {str(e)}")
+        
+        return state
+
+    def _extract_personal_info_node(self, state: ResumeState) -> ResumeState:
+        """Extract personal information using LangExtract first, then Groq fallback"""
+        try:
+            # Check if LangExtract already provided personal info
+            if state.get("langextract_data") and hasattr(state["langextract_data"], 'personal_info'):
+                langextract_info = state["langextract_data"].personal_info
+                # Validate LangExtract results
+                if langextract_info and langextract_info.get("name") and langextract_info["name"] != "Unknown":
+                    state["personal_info"] = dict(langextract_info)
+                    state["processing_stage"] = "personal_extracted_langextract"
+                    logger.info(f"Using LangExtract personal info: {langextract_info.get('name')}")
+                    return state
+            
+            if not self.api_key_valid or not self.llm:
+                # Skip Groq and use fallback directly
+                state["personal_info"] = self._fallback_personal_info(state["cleaned_text"])
+                state["processing_stage"] = "personal_extracted"
+                return state
+                
+            prompt = ChatPromptTemplate.from_messages([
+                SystemMessage(content="""Extract personal information from this resume text. Look carefully for the person's name - it's usually at the top of the resume or in the first few lines.
+
                 Required JSON format:
                 {
-                    "name": "Full Name",
+                    "name": "Full Name (REQUIRED - look for name at the beginning of the resume)",
                     "email": "email@example.com",
                     "phone": "phone number",
                     "location": "city, state/country",
@@ -190,12 +304,20 @@ class LangGraphResumeParser:
                     "portfolio": "portfolio url or empty string"
                 }
                 
+                IMPORTANT: The name is critical - examine the text carefully to find the person's full name. It's typically the first line or header of the resume. If you can't find a clear name, look for any capitalized words that might be a person's name.
+                
                 If information is not found, use empty string. Ensure valid JSON format."""),
                 HumanMessage(content=f"Resume Text:\n{state['cleaned_text'][:2000]}")
             ])
             
             response = self.llm.invoke(prompt.format_messages())
             result = self._extract_json_from_response(response.content, fallback={})
+            
+            # If name is still empty or "Unknown", try enhanced fallback
+            if not result.get("name") or result.get("name") == "Unknown":
+                fallback_info = self._fallback_personal_info(state["cleaned_text"])
+                result["name"] = fallback_info.get("name", "Unknown")
+            
             state["personal_info"] = result
             state["processing_stage"] = "personal_extracted"
             
@@ -206,8 +328,23 @@ class LangGraphResumeParser:
         return state
     
     def _extract_skills_node(self, state: ResumeState) -> ResumeState:
-        """Extract skills using Groq"""
+        """Extract skills using LangExtract first, then Groq fallback"""
         try:
+            # Check if LangExtract already provided skills
+            if state.get("langextract_data") and hasattr(state["langextract_data"], 'skills'):
+                langextract_skills = state["langextract_data"].skills
+                if langextract_skills and len(langextract_skills) > 0:
+                    state["skills"] = langextract_skills
+                    state["processing_stage"] = "skills_extracted_langextract"
+                    logger.info(f"Using LangExtract skills: {len(langextract_skills)} skills found")
+                    return state
+            
+            if not self.api_key_valid or not self.llm:
+                # Skip Groq and use fallback directly
+                state["skills"] = self._extract_skills_regex(state["cleaned_text"])
+                state["processing_stage"] = "skills_extracted"
+                return state
+                
             prompt = ChatPromptTemplate.from_messages([
                 SystemMessage(content="""Extract ALL technical skills, programming languages, frameworks, tools, and technologies from this resume.
                 Focus on: Programming languages, frameworks, databases, cloud platforms, tools, methodologies.
@@ -241,6 +378,12 @@ class LangGraphResumeParser:
     def _extract_experience_node(self, state: ResumeState) -> ResumeState:
         """Extract work experience using Groq"""
         try:
+            if not self.api_key_valid or not self.llm:
+                # Skip Groq and use fallback directly
+                state["experience"] = self._fallback_experience(state["cleaned_text"])
+                state["processing_stage"] = "experience_extracted"
+                return state
+                
             prompt = ChatPromptTemplate.from_messages([
                 SystemMessage(content="""Extract work experience from this resume. Look for job titles, companies, dates, and descriptions.
                 
@@ -277,6 +420,12 @@ class LangGraphResumeParser:
     def _extract_education_node(self, state: ResumeState) -> ResumeState:
         """Extract education using smart approach: tables when detected, OCR when images present, standard text otherwise"""
         try:
+            if not self.api_key_valid or not self.llm:
+                # Skip Groq and use fallback directly
+                state["education"] = self._fallback_education(state["cleaned_text"])
+                state["processing_stage"] = "education_extracted"
+                return state
+                
             education = []
             extraction_source = "standard_text"  # Track what method was used
             
@@ -348,7 +497,7 @@ class LangGraphResumeParser:
             certifications = self._extract_certifications_regex(state["cleaned_text"])
             
             # Enhance with Groq if needed
-            if len(certifications) < 3:  # Only use Groq if we didn't find many
+            if len(certifications) < 3 and self.api_key_valid and self.llm:  # Only use Groq if we didn't find many and LLM available
                 prompt = ChatPromptTemplate.from_messages([
                     SystemMessage(content="""Extract certifications and professional credentials from this resume.
                     
@@ -380,38 +529,520 @@ class LangGraphResumeParser:
         return state
     
     def _extract_projects_node(self, state: ResumeState) -> ResumeState:
-        """Extract projects using Groq"""
+        """Extract projects using LangExtract first, then enhanced patterns and Groq fallback"""
         try:
-            prompt = ChatPromptTemplate.from_messages([
-                SystemMessage(content="""Extract personal projects, academic projects, or significant work projects from this resume.
-                
-                Return ONLY a JSON array of project objects:
-                [{
-                    "name": "Project Name",
-                    "description": "Brief project description",
-                    "technologies": ["tech1", "tech2"],
-                    "url": "project URL or empty string",
-                    "duration": "project duration or empty string"
-                }]
-                
-                If no projects found, return empty array []."""),
-                HumanMessage(content=f"Resume Text:\n{state['cleaned_text']}")
-            ])
+            projects = []
             
-            response = self.llm.invoke(prompt.format_messages())
-            projects = self._extract_json_from_response(response.content, fallback=[])
+            # Check if LangExtract already provided projects
+            if state.get("langextract_data") and hasattr(state["langextract_data"], 'projects'):
+                langextract_projects = state["langextract_data"].projects
+                if langextract_projects and len(langextract_projects) > 0:
+                    projects = langextract_projects
+                    logger.info(f"Using LangExtract projects: {len(projects)} projects found")
+                    state["projects"] = projects
+                    state["processing_stage"] = "projects_extracted_langextract"
+                    return state
+            
+            # Fallback to pattern matching
+            logger.info("Starting project extraction with pattern matching")
+            projects = self._extract_projects_with_patterns(state["cleaned_text"])
+            logger.info(f"Pattern matching found {len(projects)} projects")
+            
+            # If no projects found and Groq is available, try Groq
+            if len(projects) == 0 and self.api_key_valid and self.llm:
+                logger.info("No projects from patterns, trying Groq")
+                prompt = ChatPromptTemplate.from_messages([
+                    SystemMessage(content="""Extract personal projects, academic projects, or significant work projects from this resume.
+                    Look for:
+                    - Project names/titles
+                    - Project descriptions
+                    - Technologies used
+                    - URLs or links
+                    - Duration or timeframes
+                    
+                    Return ONLY a JSON array of project objects:
+                    [{
+                        "name": "Project Name",
+                        "description": "Brief project description",
+                        "technologies": ["tech1", "tech2"],
+                        "url": "project URL or empty string",
+                        "duration": "project duration or empty string"
+                    }]
+                    
+                    If no projects found, return empty array []."""),
+                    HumanMessage(content=f"Resume Text:\n{state['cleaned_text']}")
+                ])
+                
+                try:
+                    response = self.llm.invoke(prompt.format_messages())
+                    llm_projects = self._extract_json_from_response(response.content, fallback=[])
+                    if isinstance(llm_projects, list) and len(llm_projects) > 0:
+                        projects = llm_projects
+                        logger.info(f"Groq found {len(projects)} projects")
+                except Exception as e:
+                    logger.warning(f"Groq project extraction failed: {e}")
             
             if not isinstance(projects, list):
+                logger.warning(f"Projects is not a list: {type(projects)}")
                 projects = []
             
+            logger.info(f"Final project count: {len(projects)}")
             state["projects"] = projects
             state["processing_stage"] = "projects_extracted"
             
         except Exception as e:
-            state["errors"].append(f"Projects extraction error: {str(e)}")
+            error_msg = f"Projects extraction error: {str(e)}"
+            logger.error(error_msg)
+            state["errors"].append(error_msg)
             state["projects"] = []
         
         return state
+    
+    def _extract_projects_with_patterns(self, text: str) -> List[Dict]:
+        """Extract projects using enhanced pattern matching with PyMuPDF-style algorithms"""
+        projects = []
+        
+        try:
+            logger.info(f"Enhanced project extraction starting with text length: {len(text)}")
+            
+            # Strategy 1: Look for explicit PROJECTS section with better patterns
+            project_section_patterns = [
+                r'(?i)(?:PROJECTS?|PERSONAL\s+PROJECTS?|KEY\s+PROJECTS?)[:\s]*\n(.*?)(?=\n\s*(?:[A-Z\s]{2,}:|EDUCATION|EXPERIENCE|SKILLS|CERTIFICATION|$))',
+                r'(?i)(?:PROJECTS?)[:\s]*(.*?)(?=(?:\n\s*[A-Z][A-Z\s]*:|$))',
+            ]
+            
+            for pattern in project_section_patterns:
+                matches = re.findall(pattern, text, re.DOTALL)
+                for match in matches:
+                    section_projects = self._parse_project_section_enhanced(match)
+                    projects.extend(section_projects)
+                    logger.info(f"Found {len(section_projects)} projects in section")
+            
+            # Strategy 2: Look for specific project patterns that match the resume format
+            if len(projects) < 3:  # Continue if we don't have enough good projects
+                # Pattern for "Built/Developed/Created + description"
+                action_patterns = [
+                    r'(?:Built|Developed|Created|Designed|Implemented)\s+([^\.]{30,200}?)(?:\.|$|\n)',
+                    r'(?:•\s*)?(?:Built|Developed|Created|Designed|Implemented)\s+([^\.]{30,200}?)(?:\.|$|\n)',
+                ]
+                
+                for pattern in action_patterns:
+                    matches = re.finditer(pattern, text, re.IGNORECASE)
+                    for match in matches:
+                        project_text = match.group(1).strip()
+                        if len(project_text) > 30:  # Minimum reasonable project description
+                            project = self._create_project_from_text(f"Built {project_text}")
+                            if project:
+                                projects.append(project)
+                                logger.info(f"Added action-based project: {project['name'][:30]}")
+            
+            # Strategy 3: Look for project titles followed by descriptions
+            if len(projects) < 2:
+                # Pattern for project titles like "Skill Gap Analyzer using Agentic AI"
+                title_pattern = r'([A-Z][^\.]{15,80}(?:Analyzer|Analysis|Engine|System|Tool|App|Platform|Website|Dashboard))[:\s]*\n?([^A-Z\n][^\n]{20,150})'
+                matches = re.finditer(title_pattern, text, re.IGNORECASE)
+                
+                for match in matches:
+                    title = match.group(1).strip()
+                    description = match.group(2).strip()
+                    
+                    # Combine title and description
+                    full_description = f"{title}. {description}"
+                    
+                    project = {
+                        "name": title,
+                        "description": full_description,
+                        "technologies": self._extract_technologies_from_text(full_description),
+                        "url": self._extract_url_from_text(full_description),
+                        "duration": ""
+                    }
+                    projects.append(project)
+                    logger.info(f"Added title-based project: {title}")
+            
+            # Strategy 4: Enhanced bullet point projects
+            if len(projects) < 2:
+                bullet_projects = self._extract_bullet_projects_enhanced(text)
+                projects.extend(bullet_projects)
+                logger.info(f"Added {len(bullet_projects)} bullet projects")
+            
+            # Strategy 5: GitHub/portfolio links as project indicators
+            if len(projects) == 0:
+                logger.info("No projects found yet, trying GitHub links")
+                github_matches = re.findall(r'https://github\.com/([\w-]+)/([\w-]+)', text)
+                logger.info(f"Found {len(github_matches)} GitHub links")
+                
+                for username, repo_name in github_matches:
+                    project = {
+                        "name": repo_name.replace('-', ' ').title(),
+                        "description": f"GitHub repository: {repo_name}",
+                        "technologies": [],
+                        "url": f"https://github.com/{username}/{repo_name}",
+                        "duration": ""
+                    }
+                    projects.append(project)
+                    logger.info(f"Added GitHub project: {project['name']}")
+            
+            # Remove duplicates and filter out non-projects
+            unique_projects = self._deduplicate_and_filter_projects(projects)
+            
+            logger.info(f"Enhanced extraction completed: {len(unique_projects)} unique projects from {len(projects)} total")
+            return unique_projects[:10]  # Limit to top 10 projects
+            
+        except Exception as e:
+            logger.error(f"Enhanced project extraction failed: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            
+        return projects
+    
+    def _parse_project_section_enhanced(self, section: str) -> List[Dict]:
+        """Parse project section with enhanced patterns"""
+        projects = []
+        
+        # Pattern 1: Numbered projects (1., 2., etc.)
+        numbered_pattern = r'(\d+)\.\s*([^\n]+(?:\n(?!\s*\d+\.)[^\n]*)*)'
+        numbered_matches = re.finditer(numbered_pattern, section)
+        
+        for match in numbered_matches:
+            project_text = match.group(2).strip()
+            project = self._parse_project_block(project_text)
+            if project:
+                projects.append(project)
+        
+        # Pattern 2: Project names with dashes and bullets (GeneRACT - AI Tool ⋄ description)
+        dash_pattern = r'([A-Z][a-zA-Z\s\-]+?)\s*[-–—]\s*([^⋄\n]+)\s*⋄([^⋄]*(?:⋄[^⋄]*)*?)(?=\n[A-Z][a-zA-Z\s\-]+?\s*[-–—]|\n[A-Z]{3,}|\Z)'
+        dash_matches = re.finditer(dash_pattern, section, re.DOTALL)
+        
+        for match in dash_matches:
+            project_name = match.group(1).strip()
+            project_title = match.group(2).strip()
+            project_content = match.group(3).strip()
+            
+            # Parse the project details
+            full_name = f"{project_name} - {project_title}"
+            description_parts = []
+            technologies = []
+            url = ""
+            
+            # Split by bullet points (⋄)
+            bullets = project_content.split('⋄')
+            for bullet in bullets:
+                bullet = bullet.strip()
+                if not bullet:
+                    continue
+                
+                bullet_lower = bullet.lower()
+                
+                # Check for URLs
+                url_match = re.search(r'https?://[^\s]+', bullet)
+                if url_match and not url:
+                    url = url_match.group()
+                
+                # Check for technologies
+                if any(keyword in bullet_lower for keyword in ['technologies:', 'tech:', 'stack:', 'built with:']):
+                    tech_text = re.sub(r'^[^:]*:', '', bullet).strip()
+                    tech_list = [tech.strip() for tech in re.split(r'[,;&]', tech_text) if tech.strip()]
+                    technologies.extend(tech_list)
+                else:
+                    if not url_match:
+                        description_parts.append(bullet)
+            
+            project = {
+                "name": project_name,
+                "description": full_name + ". " + " ".join(description_parts[:3]),
+                "technologies": technologies,
+                "url": url,
+                "duration": ""
+            }
+            projects.append(project)
+        
+        # Pattern 3: Simple bullet points
+        if not projects:
+            bullet_pattern = r'(?:^|\n)\s*[-•]\s*([^\n-•]{15,200})'
+            bullet_matches = re.finditer(bullet_pattern, section, re.MULTILINE)
+            
+            for match in bullet_matches:
+                bullet_text = match.group(1).strip()
+                if any(keyword in bullet_text.lower() for keyword in ['project', 'built', 'developed', 'created']):
+                    project = self._create_project_from_text(bullet_text)
+                    if project:
+                        projects.append(project)
+        
+        return projects
+    
+    def _create_project_from_text(self, text: str) -> Dict:
+        """Create project dictionary from text fragment with validation"""
+        if len(text) < 15:
+            return None
+        
+        # Filter out non-project text
+        exclude_patterns = [
+            r'^(EDUCATION|EXPERIENCE|SKILLS|CONTACT|CERTIFICATION)',
+            r'^(Bachelor|Master|PhD|University|College)',
+            r'^(January|February|March|April|May|June|July|August|September|October|November|December)',
+            r'^\d{4}\s*[-–]\s*\d{4}',  # Date ranges
+            r'^(Email|Phone|Address|LinkedIn)',
+            r'experience with (CNNs|RNNs|LSTMs)',  # Technical experience, not projects
+        ]
+        
+        for pattern in exclude_patterns:
+            if re.match(pattern, text, re.IGNORECASE):
+                return None
+        
+        # Extract name (first part before dash or colon)
+        name_match = re.match(r'^([^-:\.]{5,50})', text)
+        name = name_match.group(1).strip() if name_match else text[:50]
+        
+        # Clean name - remove bullet points and extra characters
+        name = re.sub(r'^[•⋄◦▪▫\s\-]+', '', name)  # Remove leading bullets/dashes
+        name = re.sub(r'\s+', ' ', name)  # Normalize whitespace
+        
+        # Additional validation - must contain project-like words
+        project_indicators = ['built', 'developed', 'created', 'designed', 'implemented', 'app', 'website', 'system', 'tool', 'project', 'analysis', 'engine', 'platform']
+        text_lower = text.lower()
+        
+        if not any(indicator in text_lower for indicator in project_indicators):
+            return None
+        
+        # Must be reasonable length
+        if len(name.strip()) < 5 or len(name.strip()) > 100:
+            return None
+        
+        project = {
+            "name": name.strip(),
+            "description": text.strip(),
+            "technologies": self._extract_technologies_from_text(text),
+            "url": self._extract_url_from_text(text),
+            "duration": ""
+        }
+        
+        return project
+    
+    def _extract_bullet_projects_enhanced(self, text: str) -> List[Dict]:
+        """Extract bullet point projects with enhanced patterns"""
+        projects = []
+        
+        bullet_patterns = [
+            r'(?:^|\n)\s*[-•⋄◦▪▫]\s*([^\n-•]{20,300})',  # Various bullet types
+            r'(?:^|\n)\s*\*\s*([^\n\*]{20,300})',        # Asterisk bullets
+            r'(?:^|\n)\s*>\s*([^\n>]{20,300})',          # Arrow bullets
+        ]
+        
+        for pattern in bullet_patterns:
+            matches = re.finditer(pattern, text, re.MULTILINE)
+            for match in matches:
+                bullet_text = match.group(1).strip()
+                
+                # Check if this looks like a project
+                project_indicators = ['project', 'built', 'developed', 'created', 'implemented', 'designed', 'app', 'website', 'system']
+                if any(indicator in bullet_text.lower() for indicator in project_indicators):
+                    project = self._create_project_from_text(bullet_text)
+                    if project:
+                        projects.append(project)
+        
+        return projects
+    
+    def _extract_multiline_projects(self, text: str) -> List[Dict]:
+        """Extract multi-line project descriptions"""
+        projects = []
+        
+        # Look for project titles followed by descriptions
+        multiline_pattern = r'([A-Z][^.\n]{10,80}(?:Project|App|Website|System|Tool|Platform))\n([^A-Z\n][^\n]{30,200}(?:\n[^A-Z\n][^\n]{10,200})*)'
+        matches = re.finditer(multiline_pattern, text, re.IGNORECASE)
+        
+        for match in matches:
+            title = match.group(1).strip()
+            description = match.group(2).strip()
+            
+            # Combine title and description
+            full_description = f"{title}. {description}"
+            
+            project = {
+                "name": title,
+                "description": full_description,
+                "technologies": self._extract_technologies_from_text(full_description),
+                "url": self._extract_url_from_text(full_description),
+                "duration": ""
+            }
+            projects.append(project)
+        
+        return projects
+    
+    def _deduplicate_and_filter_projects(self, projects: List[Dict]) -> List[Dict]:
+        """Remove duplicates and filter out non-project content"""
+        filtered_projects = []
+        
+        for project in projects:
+            # Skip if already have similar project
+            is_duplicate = False
+            for existing in filtered_projects:
+                name_similarity = self._text_similarity(project.get("name", ""), existing.get("name", ""))
+                desc_similarity = self._text_similarity(project.get("description", ""), existing.get("description", ""))
+                
+                if name_similarity > 0.7 or desc_similarity > 0.8:
+                    is_duplicate = True
+                    break
+            
+            if is_duplicate:
+                continue
+            
+            # Filter out non-project content
+            name = project.get("name", "").strip()
+            description = project.get("description", "").strip()
+            
+            # Skip if name is too short or contains excluded patterns
+            if len(name) < 5:
+                continue
+                
+            # Skip education, experience, skills sections
+            exclude_patterns = [
+                r'^(EDUCATION|EXPERIENCE|SKILLS|CONTACT|CERTIFICATION)',
+                r'^(Bachelor|Master|PhD|University|College)',
+                r'experience with (CNNs|RNNs|LSTMs|Transformers)',
+                r'^\d{4}\s*[-–]\s*\d{4}',  # Date ranges
+                r'^(Email|Phone|Address|LinkedIn)',
+                r'^(Practical experience|Experience with)',
+            ]
+            
+            skip_project = False
+            for pattern in exclude_patterns:
+                if re.match(pattern, name, re.IGNORECASE) or re.match(pattern, description, re.IGNORECASE):
+                    skip_project = True
+                    break
+            
+            if skip_project:
+                continue
+            
+            # Must contain project-like indicators
+            project_indicators = ['built', 'developed', 'created', 'designed', 'implemented', 'app', 'website', 'system', 'tool', 'project', 'analysis', 'engine', 'platform', 'analyzer']
+            text_to_check = (name + " " + description).lower()
+            
+            if any(indicator in text_to_check for indicator in project_indicators):
+                filtered_projects.append(project)
+        
+        return filtered_projects
+    
+    def _text_similarity(self, text1: str, text2: str) -> float:
+        """Calculate simple text similarity using word overlap"""
+        if not text1 or not text2:
+            return 0.0
+        
+        words1 = set(text1.lower().split())
+        words2 = set(text2.lower().split())
+        
+        if not words1 or not words2:
+            return 0.0
+        
+        intersection = words1.intersection(words2)
+        union = words1.union(words2)
+        
+        return len(intersection) / len(union) if union else 0.0
+        """Parse a project block to extract structured information"""
+        try:
+            lines = [line.strip() for line in block.split('\n') if line.strip()]
+            if not lines:
+                return None
+            
+            # First line is usually the project name
+            project_name = lines[0]
+            
+            # Extract description (usually first few lines)
+            description_lines = []
+            tech_lines = []
+            url = ""
+            duration = ""
+            
+            for line in lines[1:]:
+                line_lower = line.lower()
+                
+                # Check for URL patterns
+                url_match = re.search(r'https?://[^\s]+', line)
+                if url_match:
+                    url = url_match.group()
+                
+                # Check for duration patterns
+                duration_patterns = [
+                    r'duration:\s*([^,\n]+)',
+                    r'(\d+\s+months?)',
+                    r'(\w+\s+\d{4}\s*-\s*\w+\s+\d{4})',
+                    r'(\d{4}\s*-\s*\d{4})'
+                ]
+                for pattern in duration_patterns:
+                    duration_match = re.search(pattern, line, re.IGNORECASE)
+                    if duration_match:
+                        duration = duration_match.group(1).strip()
+                        break
+                
+                # Check for technology patterns
+                if any(keyword in line_lower for keyword in ['technologies', 'tech', 'stack', 'tools', 'built with']):
+                    tech_lines.append(line)
+                else:
+                    # Regular description line
+                    if not url_match and not duration:
+                        description_lines.append(line)
+            
+            # Combine description
+            description = ' '.join(description_lines).strip()
+            if not description:
+                description = project_name  # Fallback to project name
+            
+            # Extract technologies
+            technologies = []
+            tech_text = ' '.join(tech_lines)
+            if tech_text:
+                technologies = self._extract_technologies_from_text(tech_text)
+            
+            # If no tech found in dedicated lines, scan the whole block
+            if not technologies:
+                technologies = self._extract_technologies_from_text(block)
+            
+            return {
+                "name": project_name,
+                "description": description,
+                "technologies": technologies,
+                "url": url,
+                "duration": duration
+            }
+            
+        except Exception as e:
+            logger.error(f"Project block parsing failed: {e}")
+            return None
+    
+    def _extract_technologies_from_text(self, text: str) -> List[str]:
+        """Extract technology names from text"""
+        technologies = []
+        
+        # Common technology patterns
+        tech_patterns = [
+            r'\b(React|Angular|Vue|Node\.js|Express|Django|Flask|Spring|Laravel)\b',
+            r'\b(Python|JavaScript|Java|C\+\+|PHP|Ruby|Go|TypeScript)\b',
+            r'\b(MySQL|PostgreSQL|MongoDB|Redis|SQLite)\b',
+            r'\b(AWS|Azure|GCP|Docker|Kubernetes)\b',
+            r'\b(HTML|CSS|Bootstrap|Tailwind|SCSS)\b',
+            r'\b(Git|GitHub|GitLab|Bitbucket)\b'
+        ]
+        
+        for pattern in tech_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            for match in matches:
+                if match not in technologies:
+                    technologies.append(match)
+        
+        # Also look for comma-separated tech lists
+        tech_list_match = re.search(r'(?:technologies|tech|stack|tools):\s*([^.\n]+)', text, re.IGNORECASE)
+        if tech_list_match:
+            tech_list = tech_list_match.group(1)
+            tech_items = [item.strip() for item in re.split(r'[,;&]', tech_list) if item.strip()]
+            for item in tech_items:
+                if len(item) < 30 and item not in technologies:  # Reasonable tech name length
+                    technologies.append(item)
+        
+        return technologies
+    
+    def _extract_url_from_text(self, text: str) -> str:
+        """Extract URL from text"""
+        url_match = re.search(r'https?://[^\s]+', text)
+        return url_match.group() if url_match else ""
     
     def _extract_languages_node(self, state: ResumeState) -> ResumeState:
         """Extract spoken languages using regex"""
@@ -492,18 +1123,77 @@ class LangGraphResumeParser:
         if github_match:
             info["github"] = f"https://{github_match.group()}"
         
-        # Name (first line or before email)
-        lines = text.split('\n')[:5]  # First 5 lines
-        for line in lines:
-            line = line.strip()
-            if len(line) > 3 and len(line) < 50 and not '@' in line:
-                # Simple heuristic for name
-                words = line.split()
-                if 2 <= len(words) <= 4 and all(word.isalpha() for word in words):
-                    info["name"] = line
-                    break
+        # Enhanced name extraction
+        name = self._extract_name_enhanced(text)
+        info["name"] = name
         
         return info
+    
+    def _extract_name_enhanced(self, text: str) -> str:
+        """Enhanced name extraction with multiple strategies"""
+        # Strategy 1: Look at the very first non-empty line
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        if lines:
+            first_line = lines[0]
+            words = first_line.split()
+            
+            # Check if first line looks like a name (2-3 words, all alpha, title case)
+            if 2 <= len(words) <= 3:
+                clean_words = []
+                for word in words:
+                    clean_word = re.sub(r'[^\w]', '', word)
+                    if clean_word.isalpha() and (clean_word.istitle() or clean_word.isupper()) and len(clean_word) >= 2:
+                        # Skip obvious non-name words
+                        if clean_word.lower() not in ['resume', 'cv', 'the', 'and', 'of']:
+                            clean_words.append(clean_word)
+                
+                if len(clean_words) >= 2:
+                    candidate_name = ' '.join(clean_words)
+                    if 4 <= len(candidate_name) <= 30:
+                        return candidate_name
+        
+        # Strategy 2: Look for name patterns in first 200 characters
+        first_part = text[:200]
+        name_patterns = [
+            r'^([A-Z][a-z]{1,15}\s+[A-Z][a-z]{1,15})(?:\s|$|\n)',  # First Last at very start
+            r'\n([A-Z][a-z]{1,15}\s+[A-Z][a-z]{1,15})(?:\s|$|\n)',  # First Last after newline
+            r'^([A-Z]+\s+[A-Z]+)(?:\s|$|\n)',  # ALL CAPS names
+        ]
+        
+        for pattern in name_patterns:
+            matches = re.findall(pattern, first_part, re.MULTILINE)
+            for match in matches:
+                # Validate it's not a false positive
+                exclude_words = ['RESUME', 'CV', 'CONTACT', 'EMAIL', 'PHONE', 'ADDRESS', 
+                               'EDUCATION', 'EXPERIENCE', 'SKILLS', 'PROJECTS', 'SOFTWARE', 'DEVELOPER']
+                
+                if not any(word in match.upper() for word in exclude_words):
+                    words = match.split()
+                    if len(words) >= 2 and 4 <= len(match) <= 30:
+                        return match.strip()
+        
+        # Strategy 3: Look near contact information
+        lines = text.split('\n')
+        for i, line in enumerate(lines):
+            if '@' in line or 'email' in line.lower():  # Found contact info
+                # Check 3 lines above for name
+                for j in range(max(0, i-3), i):
+                    if j < len(lines):
+                        candidate_line = lines[j].strip()
+                        words = candidate_line.split()
+                        if 2 <= len(words) <= 3:
+                            clean_words = []
+                            for word in words:
+                                clean_word = re.sub(r'[^\w]', '', word)
+                                if clean_word.isalpha() and len(clean_word) >= 2:
+                                    clean_words.append(clean_word)
+                            
+                            if len(clean_words) >= 2:
+                                candidate_name = ' '.join(clean_words)
+                                if 4 <= len(candidate_name) <= 30:
+                                    return candidate_name
+        
+        return "Unknown"
     
     def _extract_skills_regex(self, text: str) -> List[str]:
         """Extract skills using comprehensive regex patterns"""
@@ -799,7 +1489,8 @@ class LangGraphResumeParser:
             projects=[],
             languages=[],
             errors=[],
-            processing_stage="initialized"
+            processing_stage="initialized",
+            langextract_data=None  # Initialize LangExtract data field
         )
         
         # Run the workflow
@@ -847,38 +1538,39 @@ class LangGraphResumeParser:
         """Extract education from text using enhanced Groq AI prompting with NLP fallback"""
         try:
             # First try AI extraction
-            prompt = ChatPromptTemplate.from_messages([
-                SystemMessage(content="""You are an expert at extracting education information from resumes. Extract ALL education entries including:
-                - University/College degrees (Bachelor's, Master's, PhD, etc.)
-                - High school education
-                - Certifications and courses
-                - Professional training programs
-                - Online courses from platforms like Coursera, edX, etc.
-                
-                Look for patterns like:
-                - Degree names (Bachelor of Science, Master of Arts, PhD, B.Tech, M.Tech, etc.)
-                - Institution names (Universities, Colleges, Schools)
-                - Graduation years or date ranges
-                - Fields of study (Computer Science, Engineering, etc.)
-                - GPAs or grades if mentioned
-                
-                Return ONLY a JSON array of education objects. Even if you find partial information, include it:
-                [{
-                    "degree": "Bachelor's of Science" or "High School Diploma" or "Certificate" etc.,
-                    "field": "Computer Science" or "Mathematics" or subject area,
-                    "institution": "University/College/School name",
-                    "graduation_date": "YYYY" or "MM/YYYY" or "YYYY-YYYY",
-                    "gpa": "GPA/Grade if mentioned or empty string",
-                    "location": "City, State if mentioned or empty string"
-                }]
-                
-                Look carefully through the ENTIRE text. Education might be in paragraph form, bullet points, or structured sections.
-                If no education found, return empty array []."""),
-                HumanMessage(content=f"Text to analyze:\n{text}")
-            ])
-            
-            response = self.llm.invoke(prompt.format_messages())
-            education = self._extract_json_from_response(response.content, fallback=[])
+            education = []
+            if self.api_key_valid and self.llm:
+                prompt = ChatPromptTemplate.from_messages([
+                    SystemMessage(content="""You are an expert at extracting education information from resumes. Extract ALL education entries including:
+                    - University/College degrees (Bachelor's, Master's, PhD, etc.)
+                    - High school education
+                    - Certifications and courses
+                    - Professional training programs
+                    - Online courses from platforms like Coursera, edX, etc.
+                    
+                    Look for patterns like:
+                    - Degree names (Bachelor of Science, Master of Arts, PhD, B.Tech, M.Tech, etc.)
+                    - Institution names (Universities, Colleges, Schools)
+                    - Graduation years or date ranges
+                    - Fields of study (Computer Science, Engineering, etc.)
+                    - GPAs or grades if mentioned
+                    
+                    Return ONLY a JSON array of education objects. Even if you find partial information, include it:
+                    [{
+                        "degree": "Bachelor's of Science" or "High School Diploma" or "Certificate" etc.,
+                        "field": "Computer Science" or "Mathematics" or subject area,
+                        "institution": "University/College/School name",
+                        "graduation_date": "YYYY" or "MM/YYYY" or "YYYY-YYYY",
+                        "gpa": "GPA/Grade if mentioned or empty string",
+                        "location": "City, State if mentioned or empty string"
+                    }]
+                    
+                    Look carefully through the ENTIRE text. Education might be in paragraph form, bullet points, or structured sections.
+                    If no education found, return empty array []."""),
+                    HumanMessage(content=f"Text to analyze:\n{text}")
+                ])
+                response = self.llm.invoke(prompt.format_messages())
+                education = self._extract_json_from_response(response.content, fallback=[])
             
             if isinstance(education, list) and len(education) > 0:
                 return education
@@ -895,6 +1587,10 @@ class LangGraphResumeParser:
                 logger.error(f"AI education extraction failed: {e}, using NLP fallback")
             # Fall back to NLP extraction
             return self._extract_education_with_nlp(text)
+
+    def _fallback_education(self, text: str) -> List[Dict]:
+        """Compatibility fallback method used by nodes when LLM is unavailable."""
+        return self._extract_education_with_nlp(text)
 
     def _extract_education_with_nlp(self, text: str) -> List[Dict]:
         """Advanced education extraction using NLP and pattern matching"""
@@ -1049,10 +1745,10 @@ class LangGraphResumeParser:
             logger.error(f"Error generating NLP insights: {e}")
             return None
 
-    def parse_resume(self, resume_text: str, tables_data: List[Dict] = None) -> ParsedResumeData:
-        """Synchronous wrapper for resume parsing"""
+    async def parse_resume(self, resume_text: str, tables_data: List[Dict] = None) -> ParsedResumeData:
+        """Async wrapper for resume parsing"""
         try:
-            result = asyncio.run(self.parse_resume_async(resume_text, tables_data))
+            result = await self.parse_resume_async(resume_text, tables_data)
             
             # Convert to Pydantic models
             personal_info = PersonalInfo(**result["personal_info"])
@@ -1091,13 +1787,13 @@ class LangGraphResumeParser:
 
 
 # Factory function for creating parser instance
-def create_resume_parser(groq_api_key: str = None) -> LangGraphResumeParser:
-    """Create a resume parser instance"""
+def create_resume_parser(groq_api_key: str = None, use_langextract: bool = True) -> LangGraphResumeParser:
+    """Create a resume parser instance with optional LangExtract enhancement"""
     if not groq_api_key:
         groq_api_key = os.getenv("GROQ_API_KEY")
     
     if not groq_api_key:
         raise ValueError("GROQ_API_KEY environment variable is required")
     
-    return LangGraphResumeParser(groq_api_key)
+    return LangGraphResumeParser(groq_api_key, use_langextract=use_langextract)
 

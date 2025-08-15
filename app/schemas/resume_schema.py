@@ -173,3 +173,4 @@ class ResumeDetailResponse(BaseModel):
     processing_time: float
     parsed_data: dict
     parsing_errors: List[str]
+    raw_text: Optional[str] = None  # Include raw extracted text for debugging

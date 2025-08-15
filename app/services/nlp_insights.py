@@ -1648,32 +1648,3 @@ class NLPInsightsAnalyzer:
     def save_current_config(self, config_path: str) -> bool:
         """Save current configuration to file"""
         return ConfigLoader.save_config(self.config, config_path)
-
-
-# Example usage and testing
-if __name__ == "__main__":
-    # Test the analyzer
-    analyzer = NLPInsightsAnalyzer()
-    
-    # Sample resume data
-    sample_resume = {
-        'skills': ['Python', 'Machine Learning', 'SQL', 'JavaScript', 'React', 'AWS', 'Docker'],
-        'experience': [
-            {
-                'title': 'Software Developer',
-                'company': 'TechCorp',
-                'description': 'Developed web applications using Python and React. Led a team of 3 developers.',
-                'responsibilities': ['Code development', 'Team leadership', 'Project coordination']
-            }
-        ],
-        'education': [
-            {
-                'degree': 'Bachelor of Computer Science',
-                'field': 'Computer Science',
-                'institution': 'Tech University'
-            }
-        ]
-    }
-    
-    insights = analyzer.analyze_resume_sync(sample_resume)
-    print(analyzer.generate_insights_report(insights))
